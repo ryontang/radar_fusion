@@ -1,3 +1,4 @@
+
 cmake_minimum_required(VERSION 2.8.3)
 project(radar_fusion)
 
@@ -115,6 +116,8 @@ catkin_package(
 ###########
 ## Build ##
 ###########
+
+SET(CMAKE_CXX_FLAGS "-std=c++11 -O2 -g -Wall ${CMAKE_CXX_FLAGS}")
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations

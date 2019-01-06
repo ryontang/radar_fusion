@@ -10,16 +10,19 @@
 
 //msgs from autoware_msgs
 #include "autoware_msgs/obj_label.h"
-
 #include "radar_msgs/RadarTrackArray.h"
 #include <geometry_msgs/Polygon.h>
-
+#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 //msgs to publish
 
 
 using namespace std;
 static double Threshold = 1.0;
 
+
+static ros::Publisher pub;
+static ros::Publisher marker_pub;
 
 //Data type for lidar camera fusion point
 typedef struct _lidar_camera_point{
@@ -31,12 +34,15 @@ typedef struct _lidar_camera_point{
 
 static vector<lidar_camera_point> lc_point; 
 static vector<lidar_camera_point> radar_point; 
+
 // 3 sensors point
 static vector<lidar_camera_point> three_sensors_point; 
 
-
 // For tf
 static tf::StampedTransform transformRadar2Map;
+
+static std::string object_type="person";
+static ros::Time image_obj_tracked_time;
 
 // void cal_the_centerpoint(const autoware_msgs::obj_label::ConstPtr& msg);
 
@@ -82,26 +88,110 @@ void cal_the_nearest_point(const lidar_camera_point tmp_lidar_camera_point,
     //  cout<<tmp_lidar_camera_point.z<<endl;
     //  cout<<"------------------------------"<<endl;
 
-     }
-
-     distance.push_back(distance_tmp);
+    }
+    distance.push_back(distance_tmp);
    
   }
   
   // vector<float>::iterator distance_min=min_element(distance.begin(),distance.end());
-
-  // // distance_MAX= *max_element(distance.begin(),distance.end());
+  // distance_MAX= *max_element(distance.begin(),distance.end());
   // cout<< *distance_min <<endl;
 
 }
 
+
+static visualization_msgs::MarkerArray convert_marker_array(const autoware_msgs::obj_label& src)
+{
+  visualization_msgs::MarkerArray ret;
+  int index = 0;
+
+  std_msgs::ColorRGBA color_white;
+  color_white.r = 1.0f;
+  color_white.g = 1.0f;
+  color_white.b = 1.0f;
+  color_white.a = 0.7f;
+
+  std_msgs::ColorRGBA color_red;
+  color_red.r = 1.0f;
+  color_red.g = 0.0f;
+  color_red.b = 0.0f;
+  color_red.a = 0.7f;
+
+  std_msgs::ColorRGBA color_blue;
+  color_blue.r = 0.0f;
+  color_blue.g = 0.0f;
+  color_blue.b = 1.0f;
+  color_blue.a = 0.7f;
+
+  std_msgs::ColorRGBA color_green;
+  color_green.r = 0.0f;
+  color_green.g = 1.0f;
+  color_green.b = 0.0f;
+  color_green.a = 0.7f;
+
+  for (const auto& reproj_pos : src.reprojected_pos)
+    {
+      visualization_msgs::Marker marker;
+      /* Set frame ID */
+      marker.header.frame_id = "map";
+
+      /* Set namespace adn id for this marker */
+      marker.ns = object_type;
+      marker.id = index;
+      index++;
+
+      /* set color */
+      if (object_type == "car") {
+        /* Set marker shape */
+        marker.type = visualization_msgs::Marker::SPHERE;
+
+        /* set pose of marker  */
+        marker.pose.position = reproj_pos;
+
+        /* set scale of marker */
+        marker.scale.x = (double)1.5;
+        marker.scale.y = (double)1.5;
+        marker.scale.z = (double)1.5;
+
+        marker.color = color_blue;
+      }
+      else if (object_type == "person") {
+        /* Set marker shape */
+        marker.type = visualization_msgs::Marker::CUBE;
+
+        /* set pose of marker  */
+        marker.pose.position = reproj_pos;
+
+        /* set scale of marker */
+        marker.scale.x = (double)0.7;
+        marker.scale.y = (double)0.7;
+        marker.scale.z = (double)1.8;
+
+        marker.color = color_white ;
+        //  cout<<"check marker"<<endl;
+
+      }
+      else {
+        marker.color = color_green;
+      }
+
+      marker.lifetime = ros::Duration(0.3);
+
+      ret.markers.push_back(marker);
+    }
+
+  return ret;
+}
 
 void linear_weighting_fusing(const lidar_camera_point point1,
                                    lidar_camera_point point2,
                                    lidar_camera_point& point_result)
 {
   // cout<<"check" <<endl;
-  
+  float w=0.5; //weighting
+  point_result.x=(point1.x)*w+(point2.x)*(1-w);
+  point_result.y=(point1.y)*w+(point2.y)*(1-w);
+  point_result.z=(point1.z)*w+(point2.z)*(1-w);
   
 }
 
@@ -116,7 +206,7 @@ void cal_the_centerpoint(const geometry_msgs::Polygon& tmp_radar_rect,geometry_m
   tmp_x=tmp_y=tmp_z=0;
 
   for(int i=0; i<4 ;i++){
-    //  cout<<tmp_radar_rect.points[i].x<<endl;
+     // cout<<tmp_radar_rect.points[i].x<<endl;
      tmp_x=tmp_x+tmp_radar_rect.points[i].x;
      tmp_y=tmp_y+tmp_radar_rect.points[i].y;
      tmp_z=tmp_z+tmp_radar_rect.points[i].z;
@@ -141,7 +231,9 @@ void obj_label_callback(const autoware_msgs::obj_label::ConstPtr& msg)
     lc_point.clear();//reset the struct
     int obj_num=msg->obj_id.size(); // number of people
     // cout << msg/->obj_id.size()<< endl; 
-   
+    image_obj_tracked_time = msg->header.stamp;
+      //  cout << image_obj_tracked_time<< endl; 
+
     
     //load the data from message to struct(lc_point)
     for(int i=0; i<obj_num ; i++){
@@ -228,6 +320,9 @@ int main(int argc, char *argv[])
   ros::init(argc, argv, "radar_fusion");
   ros::NodeHandle n;
 
+  autoware_msgs::obj_label obj_label_msg;
+  visualization_msgs::MarkerArray obj_label_marker_msgs;
+
   
   cout<<"start Subscriber"<< endl;
 
@@ -236,6 +331,10 @@ int main(int argc, char *argv[])
   // This data has been converted from "camera" coordinate system to "map" coordinate system.
   ros::Subscriber obj_label_sub    =   n.subscribe("/obj_person/obj_label", 1, obj_label_callback);
   ros::Subscriber radar_tracks_sub =   n.subscribe("/as_tx/radar_tracks", 1, radar_tracks_callback);
+
+  pub = n.advertise<autoware_msgs::obj_label>("obj_label_radarfusion",1);
+  marker_pub = n.advertise<visualization_msgs::MarkerArray>("obj_label_marker_radarfusion", 1);
+
 
   cout<<"Subscriber OK"<< endl;
 
@@ -246,6 +345,9 @@ int main(int argc, char *argv[])
     // cal the nearest point of each lc_point
     // lc_point  radar_point
     // lidar_camera_point nearest_point;
+    geometry_msgs::Point tmpPoint_for_fusion;
+    obj_label_msg={};
+    
     for (int i=0; i<lc_point.size();i++){
        nearest_point={};
        tmp_fusion_result_point={};
@@ -255,34 +357,41 @@ int main(int argc, char *argv[])
        if(min_distance<Threshold){
           linear_weighting_fusing(lc_point.at(i),nearest_point,tmp_fusion_result_point);
 
+          // cout<<"---結果---"<<endl;
+          // cout<<tmp_fusion_result_point.x<<endl;
+          // cout<<tmp_fusion_result_point.y<<endl;
+          // cout<<tmp_fusion_result_point.z<<endl;
+          tmpPoint_for_fusion.x=tmp_fusion_result_point.x;
+          tmpPoint_for_fusion.y=tmp_fusion_result_point.y;
+          tmpPoint_for_fusion.z=tmp_fusion_result_point.z;
+
+          
+          obj_label_msg.reprojected_pos.push_back(tmpPoint_for_fusion);
+          obj_label_msg.obj_id.push_back(lc_point.at(i).id);
+          
+          // obj_label_marker_msgs = convert_marker_array(obj_label_msg);
+          // cout<< obj_label_msg.header.stamp<<endl;
+          // cout<< obj_label_msg.type<<endl;
+          // cout<< obj_label_msg.reprojected_pos<<endl;
+          // cout<< obj_label_msg.obj_id<<endl;
+          
+          
+
+          // marker_pub.publish(obj_label_marker_msgs);
+  
        } 
     }
-    
-    // delay_test::report msg;
 
-    // msg.ThrottleReportDelay =   ThrottleReport_d;
-    // msg.BrakeReportDelay =      BrakeReport_d;
-    // msg.GearReportDelay =       GearReport_d;
-    // msg.SteeringReportDelay =   SteeringReport_d;
-    // msg.WheelSpeedReportDelay = WheelSpeedReport_d;
-    // msg.FuelLevelReportDelay =  FuelLevelReport_d;
-    // msg.TurnSignalCmdDelay =  TurnSignalCmd_d;
-    // msg.CtrlModeDelay =       CtrlMode_d;
+    obj_label_msg.type="person";
+    obj_label_msg.header.stamp = image_obj_tracked_time;
+    pub.publish(obj_label_msg);
 
-    // msg.filter_points_Delay =     filter_points_d; //lidar
-    // msg.ndt_pose_Delay =          ndt_pose_d; 
-    // msg.estimated_vel_Delay =     estimated_vel_d; //ndt_pose
-    // msg.srr_right_Marker_Delay =  srr_right_Marker_d;
-    // msg.srr_left_Marker_Delay =   srr_left_Marker_d;
-    // msg.esr_Marker_Delay =        esr_Marker_d;
-    // msg.lane_Marker_Delay =       lane_Marker_d; //mobile eye
-    // msg.object_Marker_Delay =     object_Marker_d; //mobile eye
-    // msg.compressed_image_Delay =  compressed_image_d; //usb cam
-
-    // chatter_pub.publish(msg);
+    obj_label_marker_msgs = convert_marker_array(obj_label_msg);
+    marker_pub.publish(obj_label_marker_msgs);
+   
     ros::spinOnce();
     loop_rate.sleep();
-    //++count;
+  
   }
 
 
