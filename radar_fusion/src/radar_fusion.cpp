@@ -18,7 +18,7 @@
 
 
 using namespace std;
-static double Threshold = 1.0;
+static double Threshold = 1.0;//for fusion
 
 
 static ros::Publisher pub;
