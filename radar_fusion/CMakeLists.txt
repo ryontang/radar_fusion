@@ -19,7 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-
+find_package(OpenCV REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -124,7 +124,10 @@ SET(CMAKE_CXX_FLAGS "-std=c++11 -O2 -g -Wall ${CMAKE_CXX_FLAGS}")
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+  find_package(OpenCV REQUIRED)
 )
+
+link_directories(${OpenCV_LIBRARY_DIRS})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
@@ -140,7 +143,9 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/radar_fusion_node.cpp)
-add_executable(radar_fusion src/radar_fusion.cpp)
+add_executable(radar_detection src/radar_detection.cpp)
+add_executable(radar_tracking src/radar_tracking.cpp)
+
 
 
 
@@ -158,7 +163,10 @@ add_executable(radar_fusion src/radar_fusion.cpp)
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
 # )
-target_link_libraries(radar_fusion ${catkin_LIBRARIES})
+target_link_libraries(radar_detection ${catkin_LIBRARIES})
+target_link_libraries(radar_tracking ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+
+
 
 #############
 ## Install ##
