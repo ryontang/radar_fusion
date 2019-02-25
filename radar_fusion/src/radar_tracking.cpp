@@ -5,7 +5,7 @@
 #include <algorithm>
 
 #include "/home/mec/catkin_ws/src/radar_fusion/include/radar_fusion/kf_var.hpp"
-//for tf
+// For tf
 // #include <tf/tf.h>
 // #include <tf/transform_listener.h>
 
@@ -13,6 +13,8 @@
 // #include "autoware_msgs/obj_label.h"
 #include "radar_msgs/RadarTrackArray.h"
 #include <geometry_msgs/Polygon.h>
+
+
 // #include <visualization_msgs/Marker.h>
 // #include <visualization_msgs/MarkerArray.h>
 #include "autoware_msgs/DetectedObject.h"
@@ -25,39 +27,24 @@ using namespace cv;
 
 static double Threshold = 1.0;//for fusion
 
-    // Transition State Matrix F
-    // Note: set dT at each processing step!
-    // [ 1 0 dT 0 ]
-    // [ 0 1 0  dT]
-    // [ 0 0 1  0 ]
-    // [ 0 0 0  1 ]
-    
-    // kf.transitionMatrix = cv::Mat::zeros(stateSize, stateSize, type);
-    // kf.transitionMatrix.at<float>(0) = 1.0f;
-    // kf.transitionMatrix.at<float>(2) = T;
-    // kf.transitionMatrix.at<float>(5) = 1.0f;
-    // kf.transitionMatrix.at<float>(7) = T;
-    // kf.transitionMatrix.at<float>(10) = 1.0f;
-    // kf.transitionMatrix.at<float>(15) = 1.0f;
 
+float T=60*0.001; //T : Operating rate of the system
 
 
 static ros::Publisher pub;
 // static ros::Publisher marker_pub;
 
-//Data type for lidar camera fusion point
-typedef struct _lidar_camera_point{
+typedef struct _tracking_measurement{
   int id;
-  float x;
-  float y;
-  float z;
-}lidar_camera_point;
+  Point3d position;
+  Point3d velocity;
+}tracking_measurement;
 
-static vector<lidar_camera_point> lc_point; 
-static vector<lidar_camera_point> radar_point; 
+static vector<tracking_measurement> lc_point; 
+static vector<tracking_measurement> radar_point; 
 
 // 3 sensors point
-static vector<lidar_camera_point> three_sensors_point; 
+static vector<tracking_measurement> three_sensors_point; 
 
 // For tf
 // static tf::StampedTransform transformRadar2Map;
@@ -67,73 +54,29 @@ static ros::Time image_obj_tracked_time;
 
 // void cal_the_centerpoint(const autoware_msgs::obj_label::ConstPtr& msg);
 
-lidar_camera_point tmp_lidarcamera;
-lidar_camera_point tmp_radar;
-lidar_camera_point nearest_point;
-lidar_camera_point tmp_fusion_result_point;
+tracking_measurement tmp_lidarcamera;
+tracking_measurement tmp_radar;
 
-void cal_the_nearest_point(const lidar_camera_point tmp_lidar_camera_point,
-                                 vector<lidar_camera_point> tmp_radar_point,
-                                 lidar_camera_point& nearest_point,float& min_distance)
-{  
-  vector<float> distance;
-  
-  float distance_tmp;
-  float last_distance=0;
+int lc_obj_num;
+int radar_obj_num;
+// tracking_measurement nearest_point;
+tracking_measurement tmp_fusion_result_point;
 
-  for(int i=0; i<tmp_radar_point.size(); i++ ){
-     // cal the distance of two points
-     distance_tmp=sqrt(pow(tmp_lidar_camera_point.x-tmp_radar_point.at(i).x,2)+
-                       pow(tmp_lidar_camera_point.y-tmp_radar_point.at(i).y,2)+
-                       pow(tmp_lidar_camera_point.z-tmp_radar_point.at(i).z,2));
-     // cout<<distance_tmp<<endl;
+tracking_measurement test_strust;
 
-     // find the min distance
-     if (distance_tmp<min_distance && distance_tmp<Threshold){
-       min_distance=distance_tmp;
-       nearest_point.id=tmp_radar_point.at(i).id;
-       nearest_point.x=tmp_radar_point.at(i).x;
-       nearest_point.y=tmp_radar_point.at(i).y;
-       nearest_point.z=tmp_radar_point.at(i).z;
-    //  cout<<"------------------------------"<<endl;
-    //  cout<<"最短距離"<<min_distance<<endl;
-    //  cout<<nearest_point.id<<endl;
-    //  cout<<"-----------------------"<<endl;
-
-    //  cout<<nearest_point.x<<endl;
-    //  cout<<nearest_point.y<<endl;
-    //  cout<<nearest_point.z<<endl;
-    //  cout<<"-----------------------"<<endl;
-    //  cout<<tmp_lidar_camera_point.x<<endl;
-    //  cout<<tmp_lidar_camera_point.y<<endl;
-    //  cout<<tmp_lidar_camera_point.z<<endl;
-    //  cout<<"------------------------------"<<endl;
-
-    }
-    distance.push_back(distance_tmp);
-   
-  }
-  
-  // vector<float>::iterator distance_min=min_element(distance.begin(),distance.end());
-  // distance_MAX= *max_element(distance.begin(),distance.end());
-  // cout<< *distance_min <<endl;
-
-}
+//kalman filter
+KalmanFilter kf(4, 4, 0,CV_64F);
+//kalman filter static mat
+Mat matrix_F = Mat::zeros(4, 4, CV_32F);
+Mat matrix_H = Mat::zeros(4, 4, CV_32F);
+Mat matrix_Q = Mat::zeros(4, 4, CV_32F);
+Mat matrix_R = Mat::zeros(4, 4, CV_32F);
 
 
+// 0 and 1
+vector<vector<kf_var>> kalman_var_tmp;
+bool switch_kf_tmp_bool=false;
 
-
-void linear_weighting_fusing(const lidar_camera_point point1,
-                                   lidar_camera_point point2,
-                                   lidar_camera_point& point_result)
-{
-  // cout<<"check" <<endl;
-  float w=0.5; //weighting
-  point_result.x=(point1.x)*w+(point2.x)*(1-w);
-  point_result.y=(point1.y)*w+(point2.y)*(1-w);
-  point_result.z=(point1.z)*w+(point2.z)*(1-w);
-  
-}
 
 
 //Because the radar provide four points for the rect
@@ -162,95 +105,153 @@ void cal_the_centerpoint(const geometry_msgs::Polygon& tmp_radar_rect,geometry_m
 }
 
 
+// void cal_the_nearest_point(const tracking_measurement tmp_lidar_camera_point,
+//                                  vector<tracking_measurement> tmp_radar_point,
+//                                  tracking_measurement& nearest_point,float& min_distance)
+// {  
+//   vector<float> distance;
+  
+//   float distance_tmp;
+//   float last_distance=0;
+
+//   for(int i=0; i<tmp_radar_point.size(); i++ ){
+//      // cal the distance of two points
+//      distance_tmp=sqrt(pow(tmp_lidar_camera_point.x-tmp_radar_point.at(i).x,2)+
+//                        pow(tmp_lidar_camera_point.y-tmp_radar_point.at(i).y,2)+
+//                        pow(tmp_lidar_camera_point.z-tmp_radar_point.at(i).z,2));
+//      // cout<<distance_tmp<<endl;
+
+//      // find the min distance
+//      if (distance_tmp<min_distance && distance_tmp<Threshold){
+//        min_distance=distance_tmp;
+//        nearest_point.id=tmp_radar_point.at(i).id;
+//        nearest_point.x=tmp_radar_point.at(i).x;
+//        nearest_point.y=tmp_radar_point.at(i).y;
+//        nearest_point.z=tmp_radar_point.at(i).z;
+//     //  cout<<"------------------------------"<<endl;
+//     //  cout<<"最短距離"<<min_distance<<endl;
+//     //  cout<<nearest_point.id<<endl;
+//     //  cout<<"-----------------------"<<endl;
+
+//     //  cout<<nearest_point.x<<endl;
+//     //  cout<<nearest_point.y<<endl;
+//     //  cout<<nearest_point.z<<endl;
+//     //  cout<<"-----------------------"<<endl;
+//     //  cout<<tmp_lidar_camera_point.x<<endl;
+//     //  cout<<tmp_lidar_camera_point.y<<endl;
+//     //  cout<<tmp_lidar_camera_point.z<<endl;
+//     //  cout<<"------------------------------"<<endl;
+
+//     }
+//     distance.push_back(distance_tmp);
+   
+//   }
+  
+// }//cal_the_nearest_point
+
+
+
+
+// void linear_weighting_fusing(const tracking_measurement point1,
+//                                    tracking_measurement point2,
+//                                    tracking_measurement& point_result)
+// {
+//   // cout<<"check" <<endl;
+//   float w=0.5; //weighting
+//   point_result.x=(point1.x)*w+(point2.x)*(1-w);
+//   point_result.y=(point1.y)*w+(point2.y)*(1-w);
+//   point_result.z=(point1.z)*w+(point2.z)*(1-w);
+  
+// }
+
+
+// //Because the radar provide four points for the rect
+// //so this func calculas the cebter of the rect
+// void cal_the_centerpoint(const geometry_msgs::Polygon& tmp_radar_rect,
+//                                 geometry_msgs::Point32& tmp_point)
+// {
+//   // geometry_msgs::Point tmpPoint;
+//   // cout << msg->tracks.at(0).track_shape.points[0]<<endl;
+//   float tmp_x,tmp_y,tmp_z;
+//   tmp_x=tmp_y=tmp_z=0;
+
+//   for(int i=0; i<4 ;i++){
+//      // cout<<tmp_radar_rect.points[i].x<<endl;
+//      tmp_x=tmp_x+tmp_radar_rect.points[i].x;
+//      tmp_y=tmp_y+tmp_radar_rect.points[i].y;
+//      tmp_z=tmp_z+tmp_radar_rect.points[i].z;
+//   }
+  
+//   tmp_point.x=tmp_x/4;
+//   tmp_point.y=tmp_y/4;
+//   tmp_point.z=tmp_z/4;
+// }
+
 
 //callback
 //////////////////////////////////////////////////////////////////
 
 void detected_obj_new_callback(const autoware_msgs::DetectedObjectArray::ConstPtr& msg)
 {
-    cout << "check 1" << endl;
-    // lc_point.clear();//reset the struct
-    // int obj_num=msg->obj_id.size(); // number of people
-    // // cout << msg/->obj_id.size()<< endl; 
-    // image_obj_tracked_time = msg->header.stamp;
-    //   //  cout << image_obj_tracked_time<< endl; 
-
+    // cout << "check 1" << endl;
+    lc_obj_num = msg->objects.size();// number of radar tracking objects
+    // cout<<"number of radar tracking objects: " << lc_obj_num << endl;
     
-    // //load the data from message to struct(lc_point)
-    // for(int i=0; i<obj_num ; i++){
-    //    tmp_lidarcamera.id=msg->obj_id.at(i);  
-    //    tmp_lidarcamera.x=msg->reprojected_pos.at(i).x;
-    //    tmp_lidarcamera.y=msg->reprojected_pos.at(i).y;
-    //    tmp_lidarcamera.z=msg->reprojected_pos.at(i).z;
-    //    lc_point.push_back(tmp_lidarcamera);
-       
-    // }
-    // cout<<"------------------"<<endl;
-    // cout << tmp.x << endl;
-    // cout << tmp.z << endl;
-    // cout << tmp.y << endl;
+    for (int i=0; i<lc_obj_num ; i++){
+      tmp_lidarcamera.id= msg->objects[i].id;
+      tmp_lidarcamera.position.x=msg->objects[i].pose.position.x;
+      tmp_lidarcamera.position.y=msg->objects[i].pose.position.y;
+      tmp_lidarcamera.position.z=msg->objects[i].pose.position.z;
+      tmp_lidarcamera.velocity.x=msg->objects[i].velocity.linear.x;
+      tmp_lidarcamera.velocity.y=msg->objects[i].velocity.linear.y;
+      tmp_lidarcamera.velocity.z=msg->objects[i].velocity.linear.z;
 
-    // //check the data(lc_point)
-    //  for(int j=0; j<obj_num ; j++){
-    //     cout << lc_point[j].id <<endl;
-    //     cout << lc_point[j].x <<endl;
-    //     cout << lc_point[j].y <<endl;
-    //     cout << lc_point[j].z <<endl;
-    //  }  
-    // cout << *msg << endl; //print all
-    // cout << msg->obj_id << endl;
+      // cout<<"id: "<< tmp_lidarcamera.id << endl;
+      // cout<<"Position: " << tmp_lidarcamera.position << endl;
+      // cout<<"Velocity: " << tmp_lidarcamera.velocity << endl;   
+
+      lc_point.push_back(tmp_lidarcamera);
+    }
+    
+    // cout<< "----------------------" << endl;
+    // cout<< *msg << endl;
 }
 
 // for radar 
 void radar_tracks_callback(const radar_msgs::RadarTrackArray::ConstPtr& msg)
 {
-    cout << "check 2" << endl;
-    // radar_point.clear();
-    // int radar_obj_num=msg->tracks.size(); // number of radar tracking objects
-    // // cout<< *msg << endl;
+    // cout << "check 2" << endl;
+    radar_point.clear();
 
-    // geometry_msgs::Polygon tmp_radar_rect;   
-    // geometry_msgs::Point32 tmp_point;
-    // tmp_point.x=tmp_point.y=tmp_point.z=0;
+    radar_obj_num=msg->tracks.size(); // number of radar tracking objects
+    // cout<< *msg << endl;
 
+    geometry_msgs::Polygon tmp_radar_rect;   //four point of the object 
+    geometry_msgs::Point32 tmp_point;        //the center of the object
+    tmp_point.x=tmp_point.y=tmp_point.z=0;   //initial the point
 
-    // for(int i=0; i<radar_obj_num ; i++){
+    for(int i=0; i<radar_obj_num ; i++){
    
-    //   tmp_radar_rect= msg->tracks.at(i).track_shape;
-    //   cal_the_centerpoint(tmp_radar_rect,tmp_point);//now the point center point of the radar track is "tmp_point"
+      tmp_radar_rect= msg->tracks.at(i).track_shape;
+      cal_the_centerpoint(tmp_radar_rect,tmp_point);//now the point center point of the radar track is "tmp_point"
       
-    //   /* convert from "delphi_esr" coordinate system to "map" coordinate system */
-    //   tf::Vector3 pos_in_esr_coord(tmp_point.x, tmp_point.y, tmp_point.z);
-        
-    //   static tf::TransformListener listener;
-    //   try {
-    //       listener.lookupTransform("map", "delphi_esr", ros::Time(0), transformRadar2Map);
-    //   }
-    //   catch (tf::TransformException ex) {
-    //       ROS_INFO("%s", ex.what());
-    //       return;
-    //   }
-    //   tf::Vector3 converted = transformRadar2Map * pos_in_esr_coord; //change th point to "Map" coordinate
+      tmp_radar.id = msg->tracks.at(i).track_id;
+      tmp_radar.position.x=tmp_point.x;
+      tmp_radar.position.y=tmp_point.y;
+      tmp_radar.position.z=tmp_point.z;
+      tmp_radar.velocity.x=msg->tracks.at(i).linear_velocity.x;     
+      tmp_radar.velocity.y=msg->tracks.at(i).linear_velocity.y;     
+      tmp_radar.velocity.z=msg->tracks.at(i).linear_velocity.z;    
 
-    //   tmp_point.x = converted.x();
-    //   tmp_point.y = converted.y();
-    //   tmp_point.z = converted.z();
-    //   cout<<"------------"<<endl;
-      
-    //   tmp_radar.id = msg->tracks.at(i).track_id;
-    //   tmp_radar.x=tmp_point.x;
-    //   tmp_radar.y=tmp_point.y;
-    //   tmp_radar.z=tmp_point.z;
+      // check tmp_radar
+      // cout<<tmp_radar.id<<endl;
+      // cout<<tmp_radar.position<<endl;
+      // cout<<tmp_radar.velocity<<endl;
+      // cout<<"----------------------"<<endl;
 
-    //   //check tmp_radar
-    //   // cout<<tmp_radar.id<<endl;
-    //   // cout<<tmp_radar.x<<endl;
-    //   // cout<<tmp_radar.y<<endl;
-    //   // cout<<tmp_radar.z<<endl;
-    //   radar_point.push_back(tmp_radar);
-
-    // }    
-    
+      radar_point.push_back(tmp_radar);
+    }    
+  
 }
 
 //////////////////////////////////////////////////////////////////
@@ -261,16 +262,47 @@ int main(int argc, char *argv[])
   ros::init(argc, argv, "radar_tracking");
   ros::NodeHandle n;
 
-
   //set kalman filter
-  KalmanFilter KF(4, 2, 0,CV_64F);
 
-  // autoware_msgs::obj_label obj_label_msg;
-  // visualization_msgs::MarkerArray obj_label_marker_msgs;
+    // Transition State Matrix F
+    // Note: set dT at each processing step!
+    // [ 1 0 dT 0 ]
+    // [ 0 1 0  dT]
+    // [ 0 0 1  0 ]
+    // [ 0 0 0  1 ]
+    // Mat matrix_F = Mat::zeros(4, 4, CV_32F);
+    matrix_F.at<float>(0) = 1.0;
+    matrix_F.at<float>(2) = T;
+    matrix_F.at<float>(5) = 1.0f;
+    matrix_F.at<float>(7) = T;
+    matrix_F.at<float>(10) = 1.0f;
+    matrix_F.at<float>(15) = 1.0f;
 
-  
-  cout<<"test"<< endl;
-  
+    // Measure Matrix H
+    // [ 0 0 0 0 ]
+    // [ 0 0 0 0 ]
+    // [ 0 0 1 0 ]
+    // [ 0 0 0 1 ]
+    // Mat matrix_H = Mat::zeros(4, 4, CV_32F);
+    matrix_H.at<float>(10) =  1.0;
+    matrix_H.at<float>(15) =  1.0;
+
+    // Process Noise Covariance Matrix Q
+    // [ T^3/3   T^2/2   0       0     ]
+    // [ T^2/2   T       0       0     ]
+    // [ 0       0       T^3/3   T^2/2 ]
+    // [ 0       0       T^2/2   T     ]
+
+    // Mat matrix_Q = Mat::zeros(4, 4, CV_32F);
+    matrix_Q.at<float>(0)  = pow(T,3)/3;
+    matrix_Q.at<float>(1)  = pow(T,2)/2;;
+    matrix_Q.at<float>(4)  = pow(T,2)/2;
+    matrix_Q.at<float>(5)  = T;
+    matrix_Q.at<float>(10) = pow(T,3)/3;
+    matrix_Q.at<float>(11) = pow(T,2)/2;
+    matrix_Q.at<float>(14) = pow(T,2)/2;
+    matrix_Q.at<float>(15) = T;
+ 
    
   // This data has been converted to "delphi_esr" coordinate system.
   ros::Subscriber detected_obj_new_sub    =   n.subscribe("/detected_objects_new", 1, detected_obj_new_callback);
@@ -279,83 +311,71 @@ int main(int argc, char *argv[])
   //pub = n.advertise<autoware_msgs::obj_label>("obj_label_radarfusion",1);
   //marker_pub = n.advertise<visualization_msgs::MarkerArray>("obj_label_marker_radarfusion", 1);
 
-
   cout<<"Subscriber OK"<< endl;
-
   ros::Rate loop_rate(15); //HZ
-  vector<kf_var> tmp_vec_kfvar_A;
-  vector<kf_var> tmp_vec_kfvar_B;
 
+  vector<kf_var> kalman_var_tmp_sub;
+  kf_var try1;
+  
 
   while (ros::ok())
   {
-    
-    // kf_var a;
-    // a.test1= 23;
-    kf_var try1;  
-    // try1.state=[2,1,1,1];
+    /////////////////////////////////////////////////////////////////////
+    /////////////////////     practice     /////////////////////////////
+    // try1.state={2;1;1;1};
 
-    tmp_vec_kfvar_A.push_back(try1);
+    // kalman_var_tmp.at(switch_kf_tmp_bool).push_back(try1);
+    // cout <<  kalman_var_tmp.at(switch_kf_tmp_bool).at(0).state<<endl;
+    // cout << kalman_var_tmp <<endl;
     // cout << tmp_vec_kfvar_A.at(0).state.at<float>(0,0) <<endl;
-    tmp_vec_kfvar_A.at(0).state.at<float>(0,0)=1;
-    cout << tmp_vec_kfvar_A.at(0).state <<endl;
-    cout << tmp_vec_kfvar_A.size()  <<endl;
-    // cout << a.T <<endl;
-    // cout << a.state <<endl;// print [0;0;0;0]
-    // cout << a.meas <<endl;// print [1;1;]
+    // kalman_var_tmp.at(switch_kf_tmp_bool).at(0).state.at<float>(0,0)=1;
+    // cout <<  kf_var::test    <<endl;
+
+    // int num1=1;
+    // int num2=2;
+    // int num3;
+    /////////////////////////////////////////////////////////////////////
+
+    // cout << try1.test  <<endl;
+   
+
+    // test_strust.velocity.x=121;
+
+    // num3=try1.add(num1,num2);
+    // cout << test_strust.velocity.x  <<endl;
+
+    // kalman_var_tmp_sub.clear();
     
+    kalman_var_tmp_sub.push_back(try1);
+    kalman_var_tmp.push_back(kalman_var_tmp_sub);
+    cout << kalman_var_tmp_sub.at(0).state <<endl;
+    cout << kalman_var_tmp.at(switch_kf_tmp_bool).at(0).state <<endl;
 
-    KalmanFilter KF(2, 1, 0);
-    
-    
-
-    // cal the nearest point of each lc_point
-    // lc_point  radar_point
-    // lidar_camera_point nearest_point;
-    // geometry_msgs::Point tmpPoint_for_fusion;
-    // obj_label_msg={};
-    
-    // for (int i=0; i<lc_point.size();i++){
-    //    nearest_point={};
-    //    tmp_fusion_result_point={};
-    //    float min_distance=10.0;
-    //    // cout<<"------------------------------------------------"<<endl;
-    //    cal_the_nearest_point(lc_point.at(i),radar_point,nearest_point,min_distance);
-    //    if(min_distance<Threshold){
-    //       linear_weighting_fusing(lc_point.at(i),nearest_point,tmp_fusion_result_point);
-
-    //       // cout<<"---結果---"<<endl;
-    //       // cout<<tmp_fusion_result_point.x<<endl;
-    //       // cout<<tmp_fusion_result_point.y<<endl;
-    //       // cout<<tmp_fusion_result_point.z<<endl;
-    //       tmpPoint_for_fusion.x=tmp_fusion_result_point.x;
-    //       tmpPoint_for_fusion.y=tmp_fusion_result_point.y;
-    //       tmpPoint_for_fusion.z=tmp_fusion_result_point.z;
-
-          
-    //       obj_label_msg.reprojected_pos.push_back(tmpPoint_for_fusion);
-    //       obj_label_msg.obj_id.push_back(lc_point.at(i).id);
-          
-    //       // obj_label_marker_msgs = convert_marker_array(obj_label_msg);
-    //       // cout<< obj_label_msg.header.stamp<<endl;
-    //       // cout<< obj_label_msg.type<<endl;
-    //       // cout<< obj_label_msg.reprojected_pos<<endl;
-    //       // cout<< obj_label_msg.obj_id<<endl;
-          
-          
-
-    //       // marker_pub.publish(obj_label_marker_msgs);
+    cout << "---"  <<endl;
   
-    //    } 
+    // cout <<  kalman_var_tmp.at(switch_kf_tmp_bool).at(0).state<<endl;
+
+    // kalman_var_tmp.at(switch_kf_tmp_bool).clear();
+    
+    // check if lc_point is in kalman_var_tmp
+    // for (int i=0 ; i<lc_obj_num ; i++){
+    //   //  if (lc_point.at(i)==)
     // }
 
-    // obj_label_msg.type="person";
-    // obj_label_msg.header.stamp = image_obj_tracked_time;
-    // pub.publish(obj_label_msg);
+  
+    // cout << matrix_F  <<endl;
+    // cout << matrix_H  <<endl;
+    // cout << matrix_Q  <<endl;
+    kf.transitionMatrix =matrix_F;
+    kf.measurementMatrix=matrix_H;
+    
+    
+    cout << switch_kf_tmp_bool  <<endl;
 
-    // obj_label_marker_msgs = convert_marker_array(obj_label_msg);
-    // marker_pub.publish(obj_label_marker_msgs);
-   
+    //chang to the other tmp_vector
+    // kalman_var_tmp.at(switch_kf_tmp_bool).clear(); //this may cause memery dump
+    switch_kf_tmp_bool=!switch_kf_tmp_bool;
+
     ros::spinOnce();
     loop_rate.sleep();
   

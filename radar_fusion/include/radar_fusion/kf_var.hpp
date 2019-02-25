@@ -23,22 +23,16 @@ class kf_var
 {
 public :
     int track_id; // num we can know if the object is match
-
-    int stateSize = 4;
-    int measSize = 2;
-    int contrSize = 0;
     
-    float T=60*0.001; //T : Operating rate of the system
+    int test =21;
+    int a;
+// const int b;
+    int add(int a, int b); 
     float test1;
-    // unsigned int type = CV_32F;
-
-
-    // KalmanFilter KF(int 2, int 1, 0);
-   
-    Mat state = cv::Mat::zeros(4, 1, CV_32F);
-    Mat meas = cv::Mat::ones(2, 1, CV_32F);    // [v_rx,v_ry]
-
-
+    
+    Mat state = cv::Mat::zeros(4, 1, CV_32F);  // [z_x,z_y,z_w,z_h]
+    Mat meas = cv::Mat::zeros(4, 1, CV_32F);    // [z_x,z_y,z_w,z_h]
+        
     // cv::KalmanFilter kf(4, 2, 0, CV_32F);
     // kalman kf(4, 2, 0, CV_32F);
 
@@ -46,7 +40,7 @@ public :
     
     // kalman.init( 4, 2, 0 )
     
-    
+    // void test2():
     // kf.transitionMatrix = cv::Mat::zeros(stateSize, stateSize, type);
     // kf.transitionMatrix.at<float>(0) = 1.0f;
     // kf.transitionMatrix.at<float>(2) = T;
@@ -59,3 +53,8 @@ private :
   
   std::vector<int> Container;
 };
+
+int kf_var::add(int a, int b)  
+{
+  return a + b;
+}
