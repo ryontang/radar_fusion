@@ -4,7 +4,8 @@
 #include <math.h>
 #include <algorithm>
 
-#include "/home/mec/catkin_ws/src/radar_fusion/include/radar_fusion/kf_var.hpp"
+#include "/home/mec/catkin_ws/src/radar_fusion/radar_fusion/include/radar_fusion/kf_var.hpp"
+
 // For tf
 // #include <tf/tf.h>
 // #include <tf/transform_listener.h>
@@ -72,7 +73,8 @@ Mat matrix_R = Mat::zeros(4, 4, CV_32F);
 
 
 // 0 and 1
-vector<vector<kf_var>> kalman_var_tmp;
+// vector<vector<kf_var>> kalman_var_tmp;
+vector<kf_var> kalman_var_tmp[2];
 bool switch_kf_tmp_bool=false;
 
 
@@ -300,8 +302,7 @@ int main(int argc, char *argv[])
     matrix_Q.at<float>(11) = pow(T,2)/2;
     matrix_Q.at<float>(14) = pow(T,2)/2;
     matrix_Q.at<float>(15) = T;
- 
-   
+    
   // This data has been converted to "delphi_esr" coordinate system.
   ros::Subscriber detected_obj_new_sub    =   n.subscribe("/detected_objects_new", 1, detected_obj_new_callback);
   ros::Subscriber radar_tracks_sub =   n.subscribe("/as_tx/radar_tracks", 1, radar_tracks_callback);
@@ -312,10 +313,9 @@ int main(int argc, char *argv[])
   cout<<"Subscriber OK"<< endl;
   ros::Rate loop_rate(15); //HZ
 
-  vector<kf_var> kalman_var_tmp_sub;
+  vector<kf_var> kalman_var_tmp_part;
   kf_var try1;
   
-
   while (ros::ok())
   {
     /////////////////////////////////////////////////////////////////////
@@ -336,7 +336,6 @@ int main(int argc, char *argv[])
 
     // cout << try1.test  <<endl;
    
-
     // test_strust.velocity.x=121;
 
     // num3=try1.add(num1,num2);
@@ -344,20 +343,27 @@ int main(int argc, char *argv[])
 
     // kalman_var_tmp_sub.clear();
     
-    kalman_var_tmp_sub.push_back(try1);
-    kalman_var_tmp.push_back(kalman_var_tmp_sub);
-    cout << kalman_var_tmp_sub.at(0).state <<endl;
-    cout << kalman_var_tmp.at(switch_kf_tmp_bool).at(0).state <<endl;
-
+    // kalman_var_tmp_part.push_back(try1);
+    // kalman_var_tmp.at(0).push_back(try1);
+    // cout << kalman_var_tmp_sub.at(0).state <<endl;
+    // cout << kalman_var_tmp.at(0) <<endl;
+    
     cout << "---"  <<endl;
-  
-    // cout <<  kalman_var_tmp.at(switch_kf_tmp_bool).at(0).state<<endl;
 
-    // kalman_var_tmp.at(switch_kf_tmp_bool).clear();
+    kalman_var_tmp[switch_kf_tmp_bool].push_back(try1);
+    cout <<  "test:  "  << kalman_var_tmp[switch_kf_tmp_bool].at(0).test<<endl;
+    cout <<  "length:"  << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl;
+
+    kalman_var_tmp[0].clear();
+    //  cout << "test2:" << kalman_var_tmp.at(switch_kf_tmp_bool).size()<<endl;
+    //  kalman_var_tmp.at(switch_kf_tmp_bool).clear();
+    //  kalman_var_tmp.at(switch_kf_tmp_bool).clear();
     
     // check if lc_point is in kalman_var_tmp
     // for (int i=0 ; i<lc_obj_num ; i++){
-    //   //  if (lc_point.at(i)==)
+    //   for(int j=0; i<)
+    //    if (lc_point.at(i)==kalman_var_tmp.at(switch_kf_tmp_bool).)
+
     // }
 
   
@@ -365,13 +371,12 @@ int main(int argc, char *argv[])
     // cout << matrix_H  <<endl;
     // cout << matrix_Q  <<endl;
     kf.transitionMatrix =matrix_F;
-    kf.measurementMatrix=matrix_H;
-    
+    kf.measurementMatrix=matrix_H;    
     
     cout << switch_kf_tmp_bool  <<endl;
 
-    //chang to the other tmp_vector
-    // kalman_var_tmp.at(switch_kf_tmp_bool).clear(); //this may cause memery dump
+    // change to the other tmp_vector
+    // kalman_var_tmp.clear(); //this may cause memery dump
     switch_kf_tmp_bool=!switch_kf_tmp_bool;
 
     ros::spinOnce();
