@@ -24,37 +24,25 @@ class kf_var
 public :
     int track_id; // num we can know if the object is match
     
-    int test =21;
-    int a;
-// const int b;
-    int add(int a, int b); 
-    float test1;
+    // int test =21;
+    // int a;
+    // int add(int a, int b); 
+    // float test1;
     
-    Mat state = cv::Mat::zeros(4, 1, CV_32F);  // [z_x,z_y,z_w,z_h]
-    Mat meas = cv::Mat::zeros(4, 1, CV_32F);    // [z_x,z_y,z_w,z_h]
-        
-    // cv::KalmanFilter kf(4, 2, 0, CV_32F);
-    // kalman kf(4, 2, 0, CV_32F);
+    Mat state = cv::Mat::zeros(4, 1, CV_32F);  // [x,v_x,y,v_y]
+    Mat meas = cv::Mat::zeros(4, 1, CV_32F);    // [xr,vr_x,yr,vr_y]
+    Mat error_cov_pre = cv::Mat::eye(4, 4, CV_32F);   
 
-    // cv::Mat state(stateSize, 1, type);
-    
     // kalman.init( 4, 2, 0 )
-    
-    // void test2():
-    // kf.transitionMatrix = cv::Mat::zeros(stateSize, stateSize, type);
-    // kf.transitionMatrix.at<float>(0) = 1.0f;
-    // kf.transitionMatrix.at<float>(2) = T;
-    // kf.transitionMatrix.at<float>(5) = 1.0f;
-    // kf.transitionMatrix.at<float>(7) = T;
-    // kf.transitionMatrix.at<float>(10) = 1.0f;
-    // kf.transitionMatrix.at<float>(15) = 1.0f;
+
+   
 
 private :
   
   std::vector<int> Container;
 };
 
-int kf_var::add(int a, int b)  
-{
-  return a + b;
-}
+// int kf_var::add(int a, int b)  
+// {
+//   return a + b;
+// }

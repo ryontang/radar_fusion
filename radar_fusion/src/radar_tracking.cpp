@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "/home/mec/catkin_ws/src/radar_fusion/radar_fusion/include/radar_fusion/kf_var.hpp"
+// #include "kf_var.hpp"
 
 // For tf
 // #include <tf/tf.h>
@@ -73,11 +74,11 @@ Mat matrix_R = Mat::zeros(4, 4, CV_32F);
 
 
 // 0 and 1
-// vector<vector<kf_var>> kalman_var_tmp;
 vector<kf_var> kalman_var_tmp[2];
 bool switch_kf_tmp_bool=false;
 
-
+// save the new point(tmp) to kalman_var_tmp
+kf_var  kf_var_tmp;
 
 //Because the radar provide four points for the rect
 //so this func calculas the cebter of the rect
@@ -266,32 +267,35 @@ int main(int argc, char *argv[])
 
     // Transition State Matrix F
     // Note: set dT at each processing step!
-    // [ 1 0 dT 0 ]
-    // [ 0 1 0  dT]
-    // [ 0 0 1  0 ]
-    // [ 0 0 0  1 ]
+    // [ 1 dT 0  0  ]
+    // [ 0 1  0  0  ]
+    // [ 0 0  1  dT ]
+    // [ 0 0  0  1  ]
     // Mat matrix_F = Mat::zeros(4, 4, CV_32F);
     matrix_F.at<float>(0) = 1.0;
-    matrix_F.at<float>(2) = T;
+    matrix_F.at<float>(1) = T;
     matrix_F.at<float>(5) = 1.0f;
-    matrix_F.at<float>(7) = T;
+    matrix_F.at<float>(11) = T;
     matrix_F.at<float>(10) = 1.0f;
     matrix_F.at<float>(15) = 1.0f;
 
     // Measure Matrix H
-    // [ 0 0 0 0 ]
-    // [ 0 0 0 0 ]
+    // [ 1 0 0 0 ]
+    // [ 0 1 0 0 ]
     // [ 0 0 1 0 ]
     // [ 0 0 0 1 ]
     // Mat matrix_H = Mat::zeros(4, 4, CV_32F);
+    matrix_H.at<float>(0) =  1.0;
+    matrix_H.at<float>(5) =  1.0;
     matrix_H.at<float>(10) =  1.0;
     matrix_H.at<float>(15) =  1.0;
 
     // Process Noise Covariance Matrix Q
     // [ T^3/3   T^2/2   0       0     ]
-    // [ T^2/2   T       0       0     ]
+    // [ T^2/2   T       0       0     ]*q
     // [ 0       0       T^3/3   T^2/2 ]
     // [ 0       0       T^2/2   T     ]
+    // PSD: q
 
     // Mat matrix_Q = Mat::zeros(4, 4, CV_32F);
     matrix_Q.at<float>(0)  = pow(T,3)/3;
@@ -303,9 +307,11 @@ int main(int argc, char *argv[])
     matrix_Q.at<float>(14) = pow(T,2)/2;
     matrix_Q.at<float>(15) = T;
     
+    
+
   // This data has been converted to "delphi_esr" coordinate system.
   ros::Subscriber detected_obj_new_sub    =   n.subscribe("/detected_objects_new", 1, detected_obj_new_callback);
-  ros::Subscriber radar_tracks_sub =   n.subscribe("/as_tx/radar_tracks", 1, radar_tracks_callback);
+  ros::Subscriber radar_tracks_sub =  n.subscribe("/as_tx/radar_tracks", 1, radar_tracks_callback);
 
   //pub = n.advertise<autoware_msgs::obj_label>("obj_label_radarfusion",1);
   //marker_pub = n.advertise<visualization_msgs::MarkerArray>("obj_label_marker_radarfusion", 1);
@@ -351,32 +357,80 @@ int main(int argc, char *argv[])
     cout << "---"  <<endl;
 
     kalman_var_tmp[switch_kf_tmp_bool].push_back(try1);
-    cout <<  "test:  "  << kalman_var_tmp[switch_kf_tmp_bool].at(0).test<<endl;
-    cout <<  "length:"  << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl;
+    // cout <<  "test:  "  << kalman_var_tmp[switch_kf_tmp_bool].at(0).test<<endl;
+    cout <<  "length:"  << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl; 
 
     kalman_var_tmp[0].clear();
     //  cout << "test2:" << kalman_var_tmp.at(switch_kf_tmp_bool).size()<<endl;
     //  kalman_var_tmp.at(switch_kf_tmp_bool).clear();
-    //  kalman_var_tmp.at(switch_kf_tmp_bool).clear();
-    
-    // check if lc_point is in kalman_var_tmp
-    // for (int i=0 ; i<lc_obj_num ; i++){
-    //   for(int j=0; i<)
-    //    if (lc_point.at(i)==kalman_var_tmp.at(switch_kf_tmp_bool).)
 
-    // }
 
-  
     // cout << matrix_F  <<endl;
     // cout << matrix_H  <<endl;
     // cout << matrix_Q  <<endl;
     kf.transitionMatrix =matrix_F;
-    kf.measurementMatrix=matrix_H;    
+    kf.measurementMatrix=matrix_H;  
+
+
+    // check if lc_point is in kalman_var_tmp[switch_kf_tmp_bool]
+    /////////////////////////////////////////////////////////////////////////////
+    //If the ans is YES 
+    //1. check the nearest point
+    //2. use kal
+    //3. store the point and data in [!kalman_var_tmpswitch_kf_tmp_bool]
+    //Is the ans is NO
+    ////////////////////////////////////////////////////////////////////////////
+    //1.store the NEW point and data in [!kalman_var_tmpswitch_kf_tmp_bool]
+    //
+    ////////////////////////////////////////////////////////////////////////////
+
+    for (int i=0 ; i<lc_obj_num ; i++){
+      //check every "lc_point"
+      for (int j=0; j<kalman_var_tmp[switch_kf_tmp_bool].size(); j++){
+      //check if "lc_point" is in  the last tmp vector 
+        if (lc_point.at(i).id==kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id){            
+            // calculate the nearest radar point
+            // radar_point
+            // ss
+
+        }
+        else{
+            // set lc_point into kalman_var_tmp
+            kf_var_tmp.track_id = lc_point.at(i).id;
+            // [x,v_x,y,v_y]
+            kf_var_tmp.state.at<float>(0,0)=lc_point.at(i).position.x;
+            kf_var_tmp.state.at<float>(1,0)=lc_point.at(i).position.y; 
+            kf_var_tmp.state.at<float>(2,0)=lc_point.at(i).velocity.x; 
+            kf_var_tmp.state.at<float>(3,0)=lc_point.at(i).velocity.y; 
+
+            // [xr,vr_x,yr,vr_y]
+            kf_var_tmp.meas.at<float>(0,0)=radar_point.at(i).position.x;
+            kf_var_tmp.meas.at<float>(1,0)=radar_point.at(i).position.y; 
+            kf_var_tmp.meas.at<float>(2,0)=radar_point.at(i).velocity.x; 
+            kf_var_tmp.meas.at<float>(3,0)=radar_point.at(i).velocity.y;
+
+            // kf_var_tmp.error_cov_pre=
+
+            kalman_var_tmp[!switch_kf_tmp_bool].push_back(kf_var_tmp);
+           
+            // error_cov_pre
+            // kf_var_tmp.state.at<float>(3,0)=2;//test lest the mat be [0,0,0,2]
+            // cout << kf_var_tmp.state <<endl;
+            
+        }
+      }
+      
+      //  if (lc_point.at(i)==kalman_var_tmp.at(switch_kf_tmp_bool).)
+
+    }//end for (int i=0 ; i<lc_obj_num ; i++)
+
+  
+   
     
     cout << switch_kf_tmp_bool  <<endl;
 
     // change to the other tmp_vector
-    // kalman_var_tmp.clear(); //this may cause memery dump
+    kalman_var_tmp[switch_kf_tmp_bool].clear(); //this may cause memery dump
     switch_kf_tmp_bool=!switch_kf_tmp_bool;
 
     ros::spinOnce();
