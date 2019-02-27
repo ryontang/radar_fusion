@@ -357,7 +357,7 @@ int main(int argc, char *argv[])
     cout << "---"  <<endl;
 
     kalman_var_tmp[switch_kf_tmp_bool].push_back(try1);
-    // cout <<  "test:  "  << kalman_var_tmp[switch_kf_tmp_bool].at(0).test<<endl;
+    cout <<  "test:  "  << kalman_var_tmp[switch_kf_tmp_bool].at(0).track_id<<endl;
     cout <<  "length:"  << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl; 
 
     kalman_var_tmp[0].clear();
@@ -378,8 +378,8 @@ int main(int argc, char *argv[])
     //1. check the nearest point
     //2. use kal
     //3. store the point and data in [!kalman_var_tmpswitch_kf_tmp_bool]
-    //Is the ans is NO
     ////////////////////////////////////////////////////////////////////////////
+    //If the ans is NO
     //1.store the NEW point and data in [!kalman_var_tmpswitch_kf_tmp_bool]
     //
     ////////////////////////////////////////////////////////////////////////////
@@ -388,14 +388,21 @@ int main(int argc, char *argv[])
       //check every "lc_point"
       for (int j=0; j<kalman_var_tmp[switch_kf_tmp_bool].size(); j++){
       //check if "lc_point" is in  the last tmp vector 
+          cout << lc_point.at(i).id << endl;  
+          cout << kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id << endl; 
         if (lc_point.at(i).id==kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id){            
             // calculate the nearest radar point
             // radar_point
+            cout << "check 4" << endl;
+
+            cout << radar_point.size() << endl;
             // ss
 
         }
         else{
             // set lc_point into kalman_var_tmp
+            cout << "check 5" << endl;
+
             kf_var_tmp.track_id = lc_point.at(i).id;
             // [x,v_x,y,v_y]
             kf_var_tmp.state.at<float>(0,0)=lc_point.at(i).position.x;
