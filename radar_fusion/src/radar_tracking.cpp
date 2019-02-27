@@ -334,11 +334,13 @@ int main(int argc, char *argv[])
     // cout << tmp_vec_kfvar_A.at(0).state.at<float>(0,0) <<endl;
     // kalman_var_tmp.at(switch_kf_tmp_bool).at(0).state.at<float>(0,0)=1;
     // cout <<  kf_var::test    <<endl;
-
-    // int num1=1;
-    // int num2=2;
-    // int num3;
     /////////////////////////////////////////////////////////////////////
+
+
+    // int num1=1; int num2=2;  int num3=3;
+    // cout << "check func"  <<add(num1,num2,num3) <<endl;
+
+
 
     // cout << try1.test  <<endl;
    
@@ -388,27 +390,40 @@ int main(int argc, char *argv[])
 
     for (int i=0 ; i<lc_obj_num ; i++){
       //check every "lc_point"
+      cout<< "Size of kalman_var_tmp[1/0]: " << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl;
 
       for (int j=0; j<kalman_var_tmp[switch_kf_tmp_bool].size(); j++){
       //check if "lc_point" is in  the last tmp vector 
-          // cout << "/////////////////////" << endl;  
-          // cout << lc_point.at(i).id << endl;  
-          // cout << j <<endl;
-          // cout << kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id << endl; 
-          // cout << "/////////////////////" << endl;  
-
+        
+        cout << "----- check with the last vector -----" << endl;  
+        
         if (lc_point.at(i).id==kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id){            
-            // calculate the nearest radar point
-            // radar_point
-            cout << "check 4" << endl;
+           
+          cout << "YES" << endl;
+          // cout << "//////////////////" << endl;  
+          // cout << lc_point.at(i).id << endl;  
+          // cout << "j: " <<j <<endl;
+          // cout << kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id << endl; 
+          // cout << "//////////////////" << endl;  
+  
+    
+          // calculate the nearest radar point
+          // radar_point
+          // cout << "length of radar_point: " << radar_point.size() << endl;
+          for (int k=0; k < radar_point.size() ; k++){
+              // nearest_point={};
+              // tmp_fusion_result_point={};
+              // float min_distance=10.0;
+              // cout<<"------------------------------------------------"<<endl;
+              // cal_the_nearest_point(lc_point.at(i),radar_point,nearest_point,min_distance);
+          }
 
-            cout << radar_point.size() << endl;
-            // ss
 
         }
+
         else{
             // set lc_point into kalman_var_tmp
-            cout << "check 5" << endl;
+            cout << "NO" << endl;
 
             kf_var_tmp.track_id = lc_point.at(i).id;
             // [x,v_x,y,v_y]
@@ -425,13 +440,15 @@ int main(int argc, char *argv[])
 
             // kf_var_tmp.error_cov_pre=
 
-            // kalman_var_tmp[!switch_kf_tmp_bool].push_back(kf_var_tmp);
+            kalman_var_tmp[!switch_kf_tmp_bool].push_back(kf_var_tmp);
             // cout << "check id: " << kalman_var_tmp[!switch_kf_tmp_bool].at(0).track_id << endl;
             // error_cov_pre
             // kf_var_tmp.state.at<float>(3,0)=2;//test lest the mat be [0,0,0,2]
             // cout << kf_var_tmp.state <<endl;
-            
-        }
+
+        }// end else
+        cout << "----- finish check -----" << endl;  
+
       }
       
       //  if (lc_point.at(i)==kalman_var_tmp.at(switch_kf_tmp_bool).)
@@ -444,7 +461,7 @@ int main(int argc, char *argv[])
     cout << switch_kf_tmp_bool  <<endl;
 
     // change to the other tmp_vector
-    // kalman_var_tmp[switch_kf_tmp_bool].clear(); //this may cause memery dump
+    kalman_var_tmp[switch_kf_tmp_bool].clear(); //this may cause memery dump
     switch_kf_tmp_bool=!switch_kf_tmp_bool;
 
     ros::spinOnce();
