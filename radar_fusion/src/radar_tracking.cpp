@@ -357,10 +357,11 @@ int main(int argc, char *argv[])
     cout << "---"  <<endl;
 
     kalman_var_tmp[switch_kf_tmp_bool].push_back(try1);
-    cout <<  "test:  "  << kalman_var_tmp[switch_kf_tmp_bool].at(0).track_id<<endl;
-    cout <<  "length:"  << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl; 
+    // cout <<  "test:  "  << kalman_var_tmp[switch_kf_tmp_bool].at(0).track_id<<endl;
+    // cout <<  "test:  "  << kalman_var_tmp[!switch_kf_tmp_bool].at(0).track_id<<endl;
+    // cout <<  "length:"  << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl; 
 
-    kalman_var_tmp[0].clear();
+    // kalman_var_tmp[0].clear();
     //  cout << "test2:" << kalman_var_tmp.at(switch_kf_tmp_bool).size()<<endl;
     //  kalman_var_tmp.at(switch_kf_tmp_bool).clear();
 
@@ -383,13 +384,19 @@ int main(int argc, char *argv[])
     //1.store the NEW point and data in [!kalman_var_tmpswitch_kf_tmp_bool]
     //
     ////////////////////////////////////////////////////////////////////////////
+    cout << "------------------------------------------" << endl;  
 
     for (int i=0 ; i<lc_obj_num ; i++){
       //check every "lc_point"
+
       for (int j=0; j<kalman_var_tmp[switch_kf_tmp_bool].size(); j++){
       //check if "lc_point" is in  the last tmp vector 
-          cout << lc_point.at(i).id << endl;  
-          cout << kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id << endl; 
+          // cout << "/////////////////////" << endl;  
+          // cout << lc_point.at(i).id << endl;  
+          // cout << j <<endl;
+          // cout << kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id << endl; 
+          // cout << "/////////////////////" << endl;  
+
         if (lc_point.at(i).id==kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id){            
             // calculate the nearest radar point
             // radar_point
@@ -418,8 +425,8 @@ int main(int argc, char *argv[])
 
             // kf_var_tmp.error_cov_pre=
 
-            kalman_var_tmp[!switch_kf_tmp_bool].push_back(kf_var_tmp);
-           
+            // kalman_var_tmp[!switch_kf_tmp_bool].push_back(kf_var_tmp);
+            // cout << "check id: " << kalman_var_tmp[!switch_kf_tmp_bool].at(0).track_id << endl;
             // error_cov_pre
             // kf_var_tmp.state.at<float>(3,0)=2;//test lest the mat be [0,0,0,2]
             // cout << kf_var_tmp.state <<endl;
@@ -437,7 +444,7 @@ int main(int argc, char *argv[])
     cout << switch_kf_tmp_bool  <<endl;
 
     // change to the other tmp_vector
-    kalman_var_tmp[switch_kf_tmp_bool].clear(); //this may cause memery dump
+    // kalman_var_tmp[switch_kf_tmp_bool].clear(); //this may cause memery dump
     switch_kf_tmp_bool=!switch_kf_tmp_bool;
 
     ros::spinOnce();
