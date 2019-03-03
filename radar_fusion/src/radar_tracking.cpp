@@ -25,7 +25,7 @@
 using namespace std;
 using namespace cv;
 
-static double Threshold = 1.0;//for fusion
+static double Threshold = 3.0;//for fusion
 
 
 float T=60*0.001; //T : Operating rate of the system
@@ -39,6 +39,7 @@ typedef struct _tracking_measurement{
   Point3d position;
   Point3d velocity;
 }tracking_measurement;
+
 
 static vector<tracking_measurement> lc_point; 
 static vector<tracking_measurement> radar_point; 
@@ -56,6 +57,8 @@ static ros::Time image_obj_tracked_time;
 
 tracking_measurement tmp_lidarcamera;
 tracking_measurement tmp_radar;
+tracking_measurement nearest_tracking_point;
+
 
 int lc_obj_num;
 int radar_obj_num;
@@ -72,6 +75,8 @@ Mat matrix_H = Mat::zeros(4, 4, CV_32F);
 Mat matrix_Q = Mat::zeros(4, 4, CV_32F);
 Mat matrix_R = Mat::zeros(4, 4, CV_32F);
 
+float min_distance;
+float weighting = 0.5; 
 
 // 0 and 1
 vector<kf_var> kalman_var_tmp[2];
@@ -79,6 +84,8 @@ bool switch_kf_tmp_bool=false;
 
 // save the new point(tmp) to kalman_var_tmp
 kf_var  kf_var_tmp;
+
+Mat measurement  = cv::Mat::zeros(4, 1, CV_32F);    // [xr,vr_x,yr,vr_y]
 
 //Because the radar provide four points for the rect
 //so this func calculas the cebter of the rect
@@ -106,49 +113,41 @@ void cal_the_centerpoint(const geometry_msgs::Polygon& tmp_radar_rect,geometry_m
 }
 
 
-// void cal_the_nearest_point(const tracking_measurement tmp_lidar_camera_point,
-//                                  vector<tracking_measurement> tmp_radar_point,
-//                                  tracking_measurement& nearest_point,float& min_distance)
-// {  
-//   vector<float> distance;
-  
-//   float distance_tmp;
-//   float last_distance=0;
+void cal_nearest_point_tracking(const tracking_measurement tmp_lidar_camera_point,
+                                 vector<tracking_measurement> tmp_radar_point,
+                                 tracking_measurement& nearest_point,float& min_distance)
+{  
+  vector<float> distance;
+  min_distance=10.0;
+  float distance_tmp;
+  // float last_distance=0;
 
-//   for(int i=0; i<tmp_radar_point.size(); i++ ){
-//      // cal the distance of two points
-//      distance_tmp=sqrt(pow(tmp_lidar_camera_point.x-tmp_radar_point.at(i).x,2)+
-//                        pow(tmp_lidar_camera_point.y-tmp_radar_point.at(i).y,2)+
-//                        pow(tmp_lidar_camera_point.z-tmp_radar_point.at(i).z,2));
-//      // cout<<distance_tmp<<endl;
+  for(int i=0; i<tmp_radar_point.size(); i++ ){
+     // cal the distance of two points
+     distance_tmp=sqrt(pow(tmp_lidar_camera_point.position.x-tmp_radar_point.at(i).position.x,2)+
+                       pow(tmp_lidar_camera_point.position.y-tmp_radar_point.at(i).position.y,2)+
+                       pow(tmp_lidar_camera_point.position.z-tmp_radar_point.at(i).position.z,2));
+     cout<<distance_tmp<<endl;
 
-//      // find the min distance
-//      if (distance_tmp<min_distance && distance_tmp<Threshold){
-//        min_distance=distance_tmp;
-//        nearest_point.id=tmp_radar_point.at(i).id;
-//        nearest_point.x=tmp_radar_point.at(i).x;
-//        nearest_point.y=tmp_radar_point.at(i).y;
-//        nearest_point.z=tmp_radar_point.at(i).z;
-//     //  cout<<"------------------------------"<<endl;
-//     //  cout<<"最短距離"<<min_distance<<endl;
-//     //  cout<<nearest_point.id<<endl;
-//     //  cout<<"-----------------------"<<endl;
+     // find the min distance
+     if (distance_tmp<min_distance && distance_tmp<Threshold){
+       min_distance=distance_tmp;
+       nearest_point.id=tmp_radar_point.at(i).id;
+       nearest_point.position.x=tmp_radar_point.at(i).position.x;
+       nearest_point.position.y=tmp_radar_point.at(i).position.y;
+       nearest_point.position.z=tmp_radar_point.at(i).position.z;
+       nearest_point.velocity.x=tmp_radar_point.at(i).velocity.x;
+       nearest_point.velocity.y=tmp_radar_point.at(i).velocity.y;
+       nearest_point.velocity.z=tmp_radar_point.at(i).velocity.z;
+    
+    }
+    cout<<min_distance<<endl;
 
-//     //  cout<<nearest_point.x<<endl;
-//     //  cout<<nearest_point.y<<endl;
-//     //  cout<<nearest_point.z<<endl;
-//     //  cout<<"-----------------------"<<endl;
-//     //  cout<<tmp_lidar_camera_point.x<<endl;
-//     //  cout<<tmp_lidar_camera_point.y<<endl;
-//     //  cout<<tmp_lidar_camera_point.z<<endl;
-//     //  cout<<"------------------------------"<<endl;
-
-//     }
-//     distance.push_back(distance_tmp);
+    distance.push_back(distance_tmp);
    
-//   }
+  }
   
-// }//cal_the_nearest_point
+}//cal_the_nearest_point
 
 
 
@@ -271,7 +270,7 @@ int main(int argc, char *argv[])
     // [ 0 1  0  0  ]
     // [ 0 0  1  dT ]
     // [ 0 0  0  1  ]
-    // Mat matrix_F = Mat::zeros(4, 4, CV_32F);
+    Mat matrix_F = Mat::zeros(4, 4, CV_32F);
     matrix_F.at<float>(0) = 1.0;
     matrix_F.at<float>(1) = T;
     matrix_F.at<float>(5) = 1.0f;
@@ -284,7 +283,7 @@ int main(int argc, char *argv[])
     // [ 0 1 0 0 ]
     // [ 0 0 1 0 ]
     // [ 0 0 0 1 ]
-    // Mat matrix_H = Mat::zeros(4, 4, CV_32F);
+    Mat matrix_H = Mat::zeros(4, 4, CV_32F);
     matrix_H.at<float>(0) =  1.0;
     matrix_H.at<float>(5) =  1.0;
     matrix_H.at<float>(10) =  1.0;
@@ -297,7 +296,7 @@ int main(int argc, char *argv[])
     // [ 0       0       T^2/2   T     ]
     // PSD: q
 
-    // Mat matrix_Q = Mat::zeros(4, 4, CV_32F);
+    Mat matrix_Q = Mat::zeros(4, 4, CV_32F);
     matrix_Q.at<float>(0)  = pow(T,3)/3;
     matrix_Q.at<float>(1)  = pow(T,2)/2;;
     matrix_Q.at<float>(4)  = pow(T,2)/2;
@@ -373,8 +372,8 @@ int main(int argc, char *argv[])
     // cout << matrix_Q  <<endl;
     kf.transitionMatrix =matrix_F;
     kf.measurementMatrix=matrix_H;  
-
-
+    kf.processNoiseCov=matrix_Q;
+    setIdentity(kf.measurementNoiseCov, Scalar::all(1e-1));//R
     // check if lc_point is in kalman_var_tmp[switch_kf_tmp_bool]
     /////////////////////////////////////////////////////////////////////////////
     //If the ans is YES 
@@ -386,8 +385,8 @@ int main(int argc, char *argv[])
     //1.store the NEW point and data in [!kalman_var_tmpswitch_kf_tmp_bool]
     //
     ////////////////////////////////////////////////////////////////////////////
-    cout << "------------------------------------------" << endl;  
-
+    cout << "---------------------------------------------------------------------------" << endl;  
+    cout << "size of lc objects "<< lc_obj_num << endl;
     for (int i=0 ; i<lc_obj_num ; i++){
       //check every "lc_point"
       cout<< "Size of kalman_var_tmp[1/0]: " << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl;
@@ -410,16 +409,69 @@ int main(int argc, char *argv[])
           // calculate the nearest radar point
           // radar_point
           // cout << "length of radar_point: " << radar_point.size() << endl;
-          for (int k=0; k < radar_point.size() ; k++){
-              // nearest_point={};
-              // tmp_fusion_result_point={};
-              // float min_distance=10.0;
-              // cout<<"------------------------------------------------"<<endl;
-              // cal_the_nearest_point(lc_point.at(i),radar_point,nearest_point,min_distance);
-          }
+          nearest_tracking_point={};
+          // tmp_fusion_result_point={};
+          cal_nearest_point_tracking(lc_point.at(i),radar_point,nearest_tracking_point,min_distance);
+          if(min_distance<Threshold ){
+          cout << "check dis " << endl;
+          cout << min_distance << endl;
+              //start kf
+              cout << "////////////  start kf  ////////////////" << endl;  
+               
+              cout << "lc: "<< (lc_point.at(i).position.x) << endl;
+              cout << "state last: "<<(kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(0,0)) << endl;
+
+              // randn(kf.statePost, Scalar::all(0), Scalar::all(0.1));
+
+              //the previous state of kf
+              kf.statePost.at<float>(0,0)=(lc_point.at(i).position.x)*weighting +
+                                          (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(0,0))*(1-weighting);                
+              kf.statePost.at<float>(1,0)=(lc_point.at(i).position.y)*weighting +
+                                          (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(1,0))*(1-weighting);
+              kf.statePost.at<float>(2,0)=(lc_point.at(i).velocity.x)*weighting +
+                                          (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(2,0))*(1-weighting);
+              kf.statePost.at<float>(3,0)=(lc_point.at(i).velocity.y)*weighting +
+                                          (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(3,0))*(1-weighting);
+              //I don't know why the input cannot be load so i have to use the func below 
+              kf.statePost=(Mat_<float>(4,1) << kf.statePost.at<float>(0,0),
+                                                kf.statePost.at<float>(1,0),
+                                                kf.statePost.at<float>(2,0),
+                                                kf.statePost.at<float>(3,0)) ;
+
+              kf.errorCovPost=   kalman_var_tmp[switch_kf_tmp_bool].at(j).error_cov_pre; //P
+
+              // cout << "state: "<< kf.statePost.at<float>(0,0) << endl;
+              // cout << "state: "<< kf.statePost << endl;
+              
+              // randn(kf.statePost, Scalar::all(0), Scalar::all(0.1));
+              
 
 
-        }
+              cout << "state: "<< kf.statePost << endl;
+
+              cout << "Q: "<< kf.processNoiseCov << endl;
+              cout << "F: "<<  kf.transitionMatrix << endl;
+              cout << "H: "<< kf.measurementMatrix << endl;
+              cout << "R: "<< kf.measurementNoiseCov << endl;
+
+
+              //2.kalman predi ction
+              // Mat prediction = kf.predict();
+
+              //measurement 
+              // measurement.at<float>(0,0)=nearest_tracking_point.position.x;
+              // measurement.at<float>(1,0)=nearest_tracking_point.position.y;
+              // measurement.at<float>(2,0)=nearest_tracking_point.velocity.x;
+              // measurement.at<float>(3,0)=nearest_tracking_point.velocity.y;
+
+
+
+          }     
+
+
+
+
+        }// end if
 
         else{
             // set lc_point into kalman_var_tmp
@@ -433,10 +485,10 @@ int main(int argc, char *argv[])
             kf_var_tmp.state.at<float>(3,0)=lc_point.at(i).velocity.y; 
 
             // [xr,vr_x,yr,vr_y]
-            kf_var_tmp.meas.at<float>(0,0)=radar_point.at(i).position.x;
-            kf_var_tmp.meas.at<float>(1,0)=radar_point.at(i).position.y; 
-            kf_var_tmp.meas.at<float>(2,0)=radar_point.at(i).velocity.x; 
-            kf_var_tmp.meas.at<float>(3,0)=radar_point.at(i).velocity.y;
+            // kf_var_tmp.meas.at<float>(0,0)=radar_point.at(i).position.x;
+            // kf_var_tmp.meas.at<float>(1,0)=radar_point.at(i).position.y; 
+            // kf_var_tmp.meas.at<float>(2,0)=radar_point.at(i).velocity.x; 
+            // kf_var_tmp.meas.at<float>(3,0)=radar_point.at(i).velocity.y;
 
             // kf_var_tmp.error_cov_pre=
 
@@ -447,6 +499,7 @@ int main(int argc, char *argv[])
             // cout << kf_var_tmp.state <<endl;
 
         }// end else
+
         cout << "----- finish check -----" << endl;  
 
       }

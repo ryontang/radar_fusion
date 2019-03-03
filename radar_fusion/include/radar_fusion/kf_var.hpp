@@ -21,6 +21,7 @@
 using namespace cv;
 
 
+
 class kf_var
 {
 public :
@@ -59,46 +60,46 @@ int add(int a, int b , int c)
 //                                  vector<lidar_camera_point> tmp_radar_point,
 //                                  lidar_camera_point& nearest_point,float& min_distance)
 // {  
-//   vector<float> distance;
+  // vector<float> distance;
   
-//   float distance_tmp;
-//   float last_distance=0;
+  // float distance_tmp;
+  // float last_distance=0;
 
-//   for(int i=0; i<tmp_radar_point.size(); i++ ){
-//      // cal the distance of two points
-//      distance_tmp=sqrt(pow(tmp_lidar_camera_point.x-tmp_radar_point.at(i).x,2)+
-//                        pow(tmp_lidar_camera_point.y-tmp_radar_point.at(i).y,2)+
-//                        pow(tmp_lidar_camera_point.z-tmp_radar_point.at(i).z,2));
-//      // cout<<distance_tmp<<endl;
+  // for(int i=0; i<tmp_radar_point.size(); i++ ){
+  //    // cal the distance of two points
+  //    distance_tmp=sqrt(pow(tmp_lidar_camera_point.x-tmp_radar_point.at(i).x,2)+
+  //                      pow(tmp_lidar_camera_point.y-tmp_radar_point.at(i).y,2)+
+  //                      pow(tmp_lidar_camera_point.z-tmp_radar_point.at(i).z,2));
+  //    // cout<<distance_tmp<<endl;
 
-//      // find the min distance
-//      if (distance_tmp<min_distance && distance_tmp<Threshold){
-//        min_distance=distance_tmp;
-//        nearest_point.id=tmp_radar_point.at(i).id;
-//        nearest_point.x=tmp_radar_point.at(i).x;
-//        nearest_point.y=tmp_radar_point.at(i).y;
-//        nearest_point.z=tmp_radar_point.at(i).z;
-//     //  cout<<"------------------------------"<<endl;
-//     //  cout<<"最短距離"<<min_distance<<endl;
-//     //  cout<<nearest_point.id<<endl;
-//     //  cout<<"-----------------------"<<endl;
+  //    // find the min distance
+  //    if (distance_tmp<min_distance && distance_tmp<Threshold){
+  //      min_distance=distance_tmp;
+  //      nearest_point.id=tmp_radar_point.at(i).id;
+  //      nearest_point.x=tmp_radar_point.at(i).x;
+  //      nearest_point.y=tmp_radar_point.at(i).y;
+  //      nearest_point.z=tmp_radar_point.at(i).z;
+  //   //  cout<<"------------------------------"<<endl;
+  //   //  cout<<"最短距離"<<min_distance<<endl;
+  //   //  cout<<nearest_point.id<<endl;
+  //   //  cout<<"-----------------------"<<endl;
 
-//     //  cout<<nearest_point.x<<endl;
-//     //  cout<<nearest_point.y<<endl;
-//     //  cout<<nearest_point.z<<endl;
-//     //  cout<<"-----------------------"<<endl;
-//     //  cout<<tmp_lidar_camera_point.x<<endl;
-//     //  cout<<tmp_lidar_camera_point.y<<endl;
-//     //  cout<<tmp_lidar_camera_point.z<<endl;
-//     //  cout<<"------------------------------"<<endl;
+  //   //  cout<<nearest_point.x<<endl;
+  //   //  cout<<nearest_point.y<<endl;
+  //   //  cout<<nearest_point.z<<endl;
+  //   //  cout<<"-----------------------"<<endl;
+  //   //  cout<<tmp_lidar_camera_point.x<<endl;
+  //   //  cout<<tmp_lidar_camera_point.y<<endl;
+  //  / vector<float>::iterator distance_min=min_element(distance.begin(),distance.end());
+  // // distance_MAX= *max_element(distance.begin(),distance.end());
+  // // cout<< *distance_min <<endl;
 
-//     }
-//     distance.push_back(distance_tmp);
+// } //  cout<<tmp_lidar_camera_point.z<<endl;
+  //   //  cout<<"------------------------------"<<endl;
+
+  //   }
+  //   distance.push_back(distance_tmp);
    
-//   }
+  // }
   
-//   // vector<float>::iterator distance_min=min_element(distance.begin(),distance.end());
-//   // distance_MAX= *max_element(distance.begin(),distance.end());
-//   // cout<< *distance_min <<endl;
-
-// }
+  // /
