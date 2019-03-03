@@ -12,6 +12,8 @@
         "utility": "cpp",
         "valarray": "cpp",
         "iostream": "cpp",
-        "thread": "cpp"
+        "thread": "cpp",
+        "cmath": "cpp",
+        "complex": "cpp"
     }
 }

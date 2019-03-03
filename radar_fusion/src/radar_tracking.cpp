@@ -25,7 +25,7 @@
 using namespace std;
 using namespace cv;
 
-static double Threshold = 1.0;//for fusion
+static double Threshold = 1.5;//for fusion
 
 
 float T=60*0.001; //T : Operating rate of the system
@@ -271,7 +271,20 @@ int main(int argc, char *argv[])
     matrix_Q.at<float>(11) = pow(T,2)/2;
     matrix_Q.at<float>(14) = pow(T,2)/2;
     matrix_Q.at<float>(15) = T;
-    
+    matrix_Q=225*matrix_Q;
+
+    // Measures Noise Covariance Matrix R
+    // cv::setIdentity(kf.measurementNoiseCov, cv::Scalar(1e-1));
+    // R   
+    // [ 0.5   0       0       0     ]
+    // [ 0     0.12    0       0     ]
+    // [ 0     0       0.5     0     ]
+    // [ 0     0       0       0.12  ]
+    Mat matrix_R = Mat::zeros(4, 4, CV_32F);
+    matrix_R.at<float>(0)  = 0.5 ;
+    matrix_R.at<float>(5)  = 0.12;
+    matrix_R.at<float>(10)  = 0.5 ;
+    matrix_R.at<float>(15)  = 0.12;
     
 
   // This data has been converted to "delphi_esr" coordinate system.
@@ -321,9 +334,9 @@ int main(int argc, char *argv[])
     // cout << kalman_var_tmp_sub.at(0).state <<endl;
     // cout << kalman_var_tmp.at(0) <<endl;
     
-    cout << "---"  <<endl;
+    // cout << "---"  <<endl;
 
-    kalman_var_tmp[switch_kf_tmp_bool].push_back(try1);
+    // kalman_var_tmp[switch_kf_tmp_bool].push_back(try1);
     // cout <<  "test:  "  << kalman_var_tmp[switch_kf_tmp_bool].at(0).track_id<<endl;
     // cout <<  "test:  "  << kalman_var_tmp[!switch_kf_tmp_bool].at(0).track_id<<endl;
     // cout <<  "length:"  << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl; 
@@ -339,8 +352,7 @@ int main(int argc, char *argv[])
     kf.transitionMatrix =matrix_F;
     kf.measurementMatrix=matrix_H;  
     kf.processNoiseCov=matrix_Q;
-    setIdentity(kf.measurementNoiseCov, Scalar::all(1e-1));//R
-
+    kf.measurementNoiseCov=matrix_R;
     // check if lc_point is in kalman_var_tmp[switch_kf_tmp_bool]
     /////////////////////////////////////////////////////////////////////////////
     //If the ans is YES 
@@ -359,14 +371,15 @@ int main(int argc, char *argv[])
       //check every "lc_point"
       cout<< "Size of kalman_var_tmp[1/0]: " << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl;
 
+      bool flag_exist_inlast = false; 
       for (int j=0; j<kalman_var_tmp[switch_kf_tmp_bool].size(); j++){
       //check if "lc_point" is in  the last tmp vector 
         
         cout << "----- check with the last vector -----" << endl;  
         
         if (lc_point.at(i).id==kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id){            
-           
-          cout << "YES" << endl;
+          flag_exist_inlast = true; 
+          cout <<"flag_exist_inlast: " << flag_exist_inlast << endl;
           // cout << "//////////////////" << endl;  
           // cout << lc_point.at(i).id << endl;  
           // cout << "j: " <<j <<endl;
@@ -437,25 +450,60 @@ int main(int argc, char *argv[])
 
               // 4.update
               kf.correct(measurement);    
-              // cout << "new state: "<< kf.statePost << endl;
+              cout << "new state: "<< kf.statePost << endl;
 
               cout << "////////////  end kf  ////////////////" << endl;  
 
-              // measurement 
-              // measurement.at<float>(0,0)=nearest_tracking_point.position.x;
-              // measurement.at<float>(1,0)=nearest_tracking_point.position.y;
-              // measurement.at<float>(2,0)=nearest_tracking_point.velocity.x;
-              // measurement.at<float>(3,0)=nearest_tracking_point.velocity.y;
-
+              kf_var_tmp.track_id=lc_point.at(i).id;
+              // [x,v_x,y,v_y]
+              kf_var_tmp.state=kf.statePost ;
+              kalman_var_tmp[!switch_kf_tmp_bool].push_back(kf_var_tmp);
+            // kf_var_tmp.state.at<float>(0,0)=lc_point.at(i).position.x;
+            // kf_var_tmp.state.at<float>(1,0)=lc_point.at(i).velocity.x; 
+            // kf_var_tmp.state.at<float>(2,0)=lc_point.at(i).position.y; 
+            // kf_var_tmp.state.at<float>(3,0)=lc_point.at(i).velocity.y; 
 
           }     
 
 
         }// end if
 
-        else{
-            // set lc_point into kalman_var_tmp
-            // cout << "NO" << endl;
+        // else{
+        //     // set lc_point into kalman_var_tmp
+        //     cout << flag_exist_inlast << endl;
+
+        //     kf_var_tmp.track_id = lc_point.at(i).id;
+        //     // [x,v_x,y,v_y]
+        //     kf_var_tmp.state.at<float>(0,0)=lc_point.at(i).position.x;
+        //     kf_var_tmp.state.at<float>(1,0)=lc_point.at(i).velocity.x; 
+        //     kf_var_tmp.state.at<float>(2,0)=lc_point.at(i).position.y; 
+        //     kf_var_tmp.state.at<float>(3,0)=lc_point.at(i).velocity.y; 
+
+        //     // [xr,vr_x,yr,vr_y]
+        //     // kf_var_tmp.meas.at<float>(0,0)=radar_point.at(i).position.x;
+        //     // kf_var_tmp.meas.at<float>(1,0)=radar_point.at(i).position.y; 
+        //     // kf_var_tmp.meas.at<float>(2,0)=radar_point.at(i).velocity.x; 
+        //     // kf_var_tmp.meas.at<float>(3,0)=radar_point.at(i).velocity.y;
+
+        //     // kf_var_tmp.error_cov_pre=
+
+        //     kalman_var_tmp[!switch_kf_tmp_bool].push_back(kf_var_tmp);
+        //     // cout << "check id: " << kalman_var_tmp[!switch_kf_tmp_bool].at(0).track_id << endl;
+        //     // error_cov_pre
+        //     // kf_var_tmp.state.at<float>(3,0)=2;//test lest the mat be [0,0,0,2]
+        //     // cout << kf_var_tmp.state <<endl;
+
+        // }// end else
+        
+        // cout << "----- finish check -----" << endl;  
+         if (flag_exist_inlast == true){
+           break;
+         }
+      } //end for (int j=0; j<kalman_var_tmp[switch_kf_tmp_bool].size(); j++)
+
+      if (flag_exist_inlast == false){
+           // set lc_point into kalman_var_tmp
+            cout <<"flag_exist_inlast: " <<flag_exist_inlast << endl;
 
             kf_var_tmp.track_id = lc_point.at(i).id;
             // [x,v_x,y,v_y]
@@ -477,13 +525,7 @@ int main(int argc, char *argv[])
             // error_cov_pre
             // kf_var_tmp.state.at<float>(3,0)=2;//test lest the mat be [0,0,0,2]
             // cout << kf_var_tmp.state <<endl;
-
-        }// end else
-
-        // cout << "----- finish check -----" << endl;  
-
       }
-      
       //  if (lc_point.at(i)==kalman_var_tmp.at(switch_kf_tmp_bool).)
 
     }//end for (int i=0 ; i<lc_obj_num ; i++)
@@ -491,7 +533,7 @@ int main(int argc, char *argv[])
   
    
     
-    cout << switch_kf_tmp_bool  <<endl;
+    // cout << switch_kf_tmp_bool  <<endl;
 
     // change to the other tmp_vector
     kalman_var_tmp[switch_kf_tmp_bool].clear(); //this may cause memery dump
