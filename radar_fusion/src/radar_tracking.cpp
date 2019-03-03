@@ -25,7 +25,7 @@
 using namespace std;
 using namespace cv;
 
-static double Threshold = 3.0;//for fusion
+static double Threshold = 1.0;//for fusion
 
 
 float T=60*0.001; //T : Operating rate of the system
@@ -85,7 +85,7 @@ bool switch_kf_tmp_bool=false;
 // save the new point(tmp) to kalman_var_tmp
 kf_var  kf_var_tmp;
 
-Mat measurement  = cv::Mat::zeros(4, 1, CV_32F);    // [xr,vr_x,yr,vr_y]
+Mat measurement  = Mat::zeros(4, 1, CV_32F);    // [xr,vr_x,yr,vr_y]
 
 //Because the radar provide four points for the rect
 //so this func calculas the cebter of the rect
@@ -124,10 +124,13 @@ void cal_nearest_point_tracking(const tracking_measurement tmp_lidar_camera_poin
 
   for(int i=0; i<tmp_radar_point.size(); i++ ){
      // cal the distance of two points
+    //  distance_tmp=sqrt(pow(tmp_lidar_camera_point.position.x-tmp_radar_point.at(i).position.x,2)+
+    //                    pow(tmp_lidar_camera_point.position.y-tmp_radar_point.at(i).position.y,2)+
+    //                    pow(tmp_lidar_camera_point.position.z-tmp_radar_point.at(i).position.z,2));
      distance_tmp=sqrt(pow(tmp_lidar_camera_point.position.x-tmp_radar_point.at(i).position.x,2)+
-                       pow(tmp_lidar_camera_point.position.y-tmp_radar_point.at(i).position.y,2)+
-                       pow(tmp_lidar_camera_point.position.z-tmp_radar_point.at(i).position.z,2));
-     cout<<distance_tmp<<endl;
+                       pow(tmp_lidar_camera_point.position.y-tmp_radar_point.at(i).position.y,2)
+                       );
+    //  cout<<distance_tmp<<endl;
 
      // find the min distance
      if (distance_tmp<min_distance && distance_tmp<Threshold){
@@ -141,7 +144,7 @@ void cal_nearest_point_tracking(const tracking_measurement tmp_lidar_camera_poin
        nearest_point.velocity.z=tmp_radar_point.at(i).velocity.z;
     
     }
-    cout<<min_distance<<endl;
+    // cout<<min_distance<<endl;
 
     distance.push_back(distance_tmp);
    
@@ -149,43 +152,6 @@ void cal_nearest_point_tracking(const tracking_measurement tmp_lidar_camera_poin
   
 }//cal_the_nearest_point
 
-
-
-
-// void linear_weighting_fusing(const tracking_measurement point1,
-//                                    tracking_measurement point2,
-//                                    tracking_measurement& point_result)
-// {
-//   // cout<<"check" <<endl;
-//   float w=0.5; //weighting
-//   point_result.x=(point1.x)*w+(point2.x)*(1-w);
-//   point_result.y=(point1.y)*w+(point2.y)*(1-w);
-//   point_result.z=(point1.z)*w+(point2.z)*(1-w);
-  
-// }
-
-
-// //Because the radar provide four points for the rect
-// //so this func calculas the cebter of the rect
-// void cal_the_centerpoint(const geometry_msgs::Polygon& tmp_radar_rect,
-//                                 geometry_msgs::Point32& tmp_point)
-// {
-//   // geometry_msgs::Point tmpPoint;
-//   // cout << msg->tracks.at(0).track_shape.points[0]<<endl;
-//   float tmp_x,tmp_y,tmp_z;
-//   tmp_x=tmp_y=tmp_z=0;
-
-//   for(int i=0; i<4 ;i++){
-//      // cout<<tmp_radar_rect.points[i].x<<endl;
-//      tmp_x=tmp_x+tmp_radar_rect.points[i].x;
-//      tmp_y=tmp_y+tmp_radar_rect.points[i].y;
-//      tmp_z=tmp_z+tmp_radar_rect.points[i].z;
-//   }
-  
-//   tmp_point.x=tmp_x/4;
-//   tmp_point.y=tmp_y/4;
-//   tmp_point.z=tmp_z/4;
-// }
 
 
 //callback
@@ -374,6 +340,7 @@ int main(int argc, char *argv[])
     kf.measurementMatrix=matrix_H;  
     kf.processNoiseCov=matrix_Q;
     setIdentity(kf.measurementNoiseCov, Scalar::all(1e-1));//R
+
     // check if lc_point is in kalman_var_tmp[switch_kf_tmp_bool]
     /////////////////////////////////////////////////////////////////////////////
     //If the ans is YES 
@@ -385,6 +352,7 @@ int main(int argc, char *argv[])
     //1.store the NEW point and data in [!kalman_var_tmpswitch_kf_tmp_bool]
     //
     ////////////////////////////////////////////////////////////////////////////
+
     cout << "---------------------------------------------------------------------------" << endl;  
     cout << "size of lc objects "<< lc_obj_num << endl;
     for (int i=0 ; i<lc_obj_num ; i++){
@@ -404,31 +372,30 @@ int main(int argc, char *argv[])
           // cout << "j: " <<j <<endl;
           // cout << kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id << endl; 
           // cout << "//////////////////" << endl;  
-  
-    
+      
           // calculate the nearest radar point
           // radar_point
           // cout << "length of radar_point: " << radar_point.size() << endl;
           nearest_tracking_point={};
           // tmp_fusion_result_point={};
           cal_nearest_point_tracking(lc_point.at(i),radar_point,nearest_tracking_point,min_distance);
+          
           if(min_distance<Threshold ){
           cout << "check dis " << endl;
           cout << min_distance << endl;
-              //start kf
-              cout << "////////////  start kf  ////////////////" << endl;  
-               
-              cout << "lc: "<< (lc_point.at(i).position.x) << endl;
-              cout << "state last: "<<(kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(0,0)) << endl;
 
-              // randn(kf.statePost, Scalar::all(0), Scalar::all(0.1));
+              //start kf
+              cout << "////////////  start kf  ////////////////" << endl << endl;  
+               
+              // cout << "lc: "<< (lc_point.at(i).position.x) << endl;
+              // cout << "state last: "<<(kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(0,0)) << endl;
 
               //the previous state of kf
               kf.statePost.at<float>(0,0)=(lc_point.at(i).position.x)*weighting +
                                           (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(0,0))*(1-weighting);                
-              kf.statePost.at<float>(1,0)=(lc_point.at(i).position.y)*weighting +
+              kf.statePost.at<float>(1,0)=(lc_point.at(i).velocity.x)*weighting +
                                           (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(1,0))*(1-weighting);
-              kf.statePost.at<float>(2,0)=(lc_point.at(i).velocity.x)*weighting +
+              kf.statePost.at<float>(2,0)=(lc_point.at(i).position.y)*weighting +
                                           (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(2,0))*(1-weighting);
               kf.statePost.at<float>(3,0)=(lc_point.at(i).velocity.y)*weighting +
                                           (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(3,0))*(1-weighting);
@@ -446,42 +413,55 @@ int main(int argc, char *argv[])
               // randn(kf.statePost, Scalar::all(0), Scalar::all(0.1));
               
 
-
               cout << "state: "<< kf.statePost << endl;
 
-              cout << "Q: "<< kf.processNoiseCov << endl;
-              cout << "F: "<<  kf.transitionMatrix << endl;
-              cout << "H: "<< kf.measurementMatrix << endl;
-              cout << "R: "<< kf.measurementNoiseCov << endl;
+              // cout << "Q: "<< kf.processNoiseCov     << endl;
+              // cout << "F: "<< kf.transitionMatrix    << endl;
+              // cout << "H: "<< kf.measurementMatrix   << endl;
+              // cout << "R: "<< kf.measurementNoiseCov << endl;
 
 
-              //2.kalman predi ction
-              // Mat prediction = kf.predict();
+              // 2.kalman prediction
+              Mat prediction = kf.predict();
+              cout << "new state: "<< kf.statePost << endl;
+              // cout << "new statePre: "<< kf.statePre << endl;
 
-              //measurement 
+              // 3.update measurement
+              measurement =(Mat_<float>(4,1) << nearest_tracking_point.position.x,
+                                                nearest_tracking_point.velocity.x,
+                                                nearest_tracking_point.position.y,
+                                                nearest_tracking_point.velocity.y) ;
+           
+
+              cout << "check measurement: " << measurement << endl  << endl;  
+
+              // 4.update
+              kf.correct(measurement);    
+              // cout << "new state: "<< kf.statePost << endl;
+
+              cout << "////////////  end kf  ////////////////" << endl;  
+
+              // measurement 
               // measurement.at<float>(0,0)=nearest_tracking_point.position.x;
               // measurement.at<float>(1,0)=nearest_tracking_point.position.y;
               // measurement.at<float>(2,0)=nearest_tracking_point.velocity.x;
               // measurement.at<float>(3,0)=nearest_tracking_point.velocity.y;
 
 
-
           }     
-
-
 
 
         }// end if
 
         else{
             // set lc_point into kalman_var_tmp
-            cout << "NO" << endl;
+            // cout << "NO" << endl;
 
             kf_var_tmp.track_id = lc_point.at(i).id;
             // [x,v_x,y,v_y]
             kf_var_tmp.state.at<float>(0,0)=lc_point.at(i).position.x;
-            kf_var_tmp.state.at<float>(1,0)=lc_point.at(i).position.y; 
-            kf_var_tmp.state.at<float>(2,0)=lc_point.at(i).velocity.x; 
+            kf_var_tmp.state.at<float>(1,0)=lc_point.at(i).velocity.x; 
+            kf_var_tmp.state.at<float>(2,0)=lc_point.at(i).position.y; 
             kf_var_tmp.state.at<float>(3,0)=lc_point.at(i).velocity.y; 
 
             // [xr,vr_x,yr,vr_y]
@@ -500,7 +480,7 @@ int main(int argc, char *argv[])
 
         }// end else
 
-        cout << "----- finish check -----" << endl;  
+        // cout << "----- finish check -----" << endl;  
 
       }
       
