@@ -16,10 +16,19 @@
 #include <opencv2/opencv.hpp>
 #include <opencv/cv.h>
 
+#include <geometry_msgs/Vector3.h>
 
 
 using namespace cv;
 
+class tracking_measurement
+{
+  public :
+    int id;
+    Point3d position;
+    Point3d velocity;
+    geometry_msgs::Vector3 dimensions;
+};
 
 
 class kf_var
@@ -34,12 +43,10 @@ public :
     
     Mat state = cv::Mat::zeros(4, 1, CV_32F);  // [x,v_x,y,v_y]
     Mat meas = cv::Mat::zeros(4, 1, CV_32F);    // [xr,vr_x,yr,vr_y]
-    Mat error_cov_pre = cv::Mat::eye(4, 4, CV_32F);   
-
-    // kalman.init( 4, 2, 0 )
-
-   
-
+    Mat error_cov_pre = cv::Mat::eye(4, 4, CV_32F);   //initial P
+    float z ; 
+    float vz ; 
+  
 private :
   
   std::vector<int> Container;
