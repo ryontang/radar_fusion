@@ -15,6 +15,9 @@
 // #include "autoware_msgs/obj_label.h"
 #include "radar_msgs/RadarTrackArray.h"
 #include <geometry_msgs/Polygon.h>
+#include <std_msgs/Header.h>
+
+
 
 
 #include <jsk_recognition_msgs/BoundingBox.h>
@@ -36,7 +39,6 @@ float T=60*0.001; //T : Operating rate of the system
 
 static ros::Publisher pub;
 static ros::Publisher pub_jsk_tracked_objects_new_;
-// static ros::Publisher marker_pub;
 
 // typedef struct _tracking_measurement{
 //   int id;
@@ -49,16 +51,10 @@ static ros::Publisher pub_jsk_tracked_objects_new_;
 static vector<tracking_measurement> lc_point; 
 static vector<tracking_measurement> radar_point; 
 
-// 3 sensors point
-static vector<tracking_measurement> three_sensors_point; 
-
-// For tf
-// static tf::StampedTransform transformRadar2Map;
 
 static std::string object_type="person";
 static ros::Time image_obj_tracked_time;
 
-// void cal_the_centerpoint(const autoware_msgs::obj_label::ConstPtr& msg);
 
 tracking_measurement tmp_lidarcamera;
 tracking_measurement tmp_radar;
@@ -74,7 +70,9 @@ int radar_obj_num;
 // tracking_measurement nearest_point;
 tracking_measurement tmp_fusion_result_point;
 
-tracking_measurement test_strust;
+// tracking_measurement test_strust;
+
+std_msgs::Header header_tmp;
 
 //kalman filter
 KalmanFilter kf(4, 4, 0,CV_64F);
@@ -147,7 +145,7 @@ void cal_nearest_point_tracking(const tracking_measurement tmp_lidar_camera_poin
        nearest_point.id=tmp_radar_point.at(i).id;
        nearest_point.position.x=tmp_radar_point.at(i).position.x;
        nearest_point.position.y=tmp_radar_point.at(i).position.y;
-       nearest_point.position.z=tmp_radar_point.at(i).position.z;
+       nearest_point.position.z=tmp_radar_point.at(i).position.z; 
        nearest_point.velocity.x=tmp_radar_point.at(i).velocity.x;
        nearest_point.velocity.y=tmp_radar_point.at(i).velocity.y;
        nearest_point.velocity.z=tmp_radar_point.at(i).velocity.z;
@@ -171,7 +169,7 @@ void detected_obj_new_callback(const autoware_msgs::DetectedObjectArray::ConstPt
     // cout << "check 1" << endl;
     lc_obj_num = msg->objects.size();// number of radar tracking objects
     // cout<<"number of radar tracking objects: " << lc_obj_num << endl;
-    
+    lc_point.clear();
     for (int i=0; i<lc_obj_num ; i++){
       tmp_lidarcamera.id= msg->objects[i].id;
       tmp_lidarcamera.position.x=msg->objects[i].pose.position.x;
@@ -187,7 +185,7 @@ void detected_obj_new_callback(const autoware_msgs::DetectedObjectArray::ConstPt
 
       lc_point.push_back(tmp_lidarcamera);
     }
-    
+    header_tmp=msg->header;
     // cout<< "----------------------" << endl;
     // cout<< *msg << endl;
 }
@@ -301,7 +299,7 @@ int main(int argc, char *argv[])
   ros::Subscriber radar_tracks_sub =  n.subscribe("/as_tx/radar_tracks", 1, radar_tracks_callback);
 
   //pub = n.advertise<autoware_msgs::obj_label>("obj_label_radarfusion",1);
-  pub_jsk_tracked_objects_new_ = n.advertise<jsk_recognition_msgs::BoundingBoxArray>("/bounding_boxes_tracked_new",1);//wei
+  pub_jsk_tracked_objects_new_ = n.advertise<jsk_recognition_msgs::BoundingBoxArray>("/bounding_boxes_tracked/radar_fusion",1);//wei
 
   //marker_pub = n.advertise<visualization_msgs::MarkerArray>("obj_label_marker_radarfusion", 1);
 
@@ -379,10 +377,16 @@ int main(int argc, char *argv[])
     cout << "---------------------------------------------------------------------------" << endl;  
     cout << "size of lc objects "<< lc_obj_num << endl;
     for (int i=0 ; i<lc_obj_num ; i++){
+
+      //for show bounging box on RViz
+    	jsk_recognition_msgs::BoundingBox tracked_box_new;
+      autoware_msgs::DetectedObjectArray detected_objects_new;
+
       //check every "lc_point"
       cout<< "Size of kalman_var_tmp[1/0]: " << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl;
 
-      bool flag_exist_inlast = false; 
+      bool flag_exist_inlast = false; // initialize the flag every time
+
       for (int j=0; j<kalman_var_tmp[switch_kf_tmp_bool].size(); j++){
       //check if "lc_point" is in  the last tmp vector 
         
@@ -435,8 +439,7 @@ int main(int argc, char *argv[])
 
               // cout << "state: "<< kf.statePost.at<float>(0,0) << endl;
               // cout << "state: "<< kf.statePost << endl;
-              
-              
+                     
 
               cout << "state: "<< kf.statePost << endl;
 
@@ -467,8 +470,7 @@ int main(int argc, char *argv[])
               cout << "////////////  end kf  ////////////////" << endl;  
 
               kf_var_tmp.track_id=lc_point.at(i).id;
-              // [x,v_x,y,v_y]
-              kf_var_tmp.state=kf.statePost ;
+              kf_var_tmp.state=kf.statePost ;              // [x,v_x,y,v_y]
               kf_var_tmp.z=lc_point.at(i).position.z;
               kf_var_tmp.error_cov_pre = kf.errorCovPost;
               // cout << "errorCovPre: "<< kf.errorCovPre << endl;
@@ -526,34 +528,39 @@ int main(int argc, char *argv[])
             kf_var_tmp.state.at<float>(3,0)=lc_point.at(i).velocity.y; 
             kf_var_tmp.z=lc_point.at(i).position.z;
 
-            // kf_var_tmp.error_cov_pre=
-
             kalman_var_tmp[!switch_kf_tmp_bool].push_back(kf_var_tmp);
             // cout << "check id: " << kalman_var_tmp[!switch_kf_tmp_bool].at(0).track_id << endl;
             // error_cov_pre
             // kf_var_tmp.state.at<float>(3,0)=2;//test lest the mat be [0,0,0,2]
             // cout << kf_var_tmp.state <<endl;
       }
-
+        
         //BBOXES
-	    	// jsk_recognition_msgs::BoundingBox tracked_box_new;
-	    	// tracked_box_new.pose = detected_newobject.pose;
-	    	// tracked_box_new.header = detected_newobject.header;
-	    	// tracked_box_new.label = detected_newobject.id;
-	    	// tracked_box_new.value =detected_newobject.id;
-	    	// tracked_box_new.dimensions = detected_newobject.dimensions;
-	    	// tracked_boxes_new.boxes.push_back(tracked_box_new);
-	    	// //END BBOXES
+	    	tracked_box_new.pose.position.x =kf_var_tmp.state.at<float>(0,0);
+ 	    	tracked_box_new.pose.position.y =kf_var_tmp.state.at<float>(2,0);
+	    	tracked_box_new.pose.position.z =kf_var_tmp.z;
+        double sec =ros::Time::now().toSec();
+        // double nsec =ros::Time::now();
 
-        // tracked_boxes_new.header=detected_newobject.header;
-	    	// detected_objects_new.objects.push_back(detected_newobject);
+	    	tracked_box_new.header.stamp.sec = sec;
+        // tracked_box_new.header.stamp.nsec = nsec;
+	    	tracked_box_new.header.frame_id = "delphi_esr";
+
+	    	tracked_box_new.label = kf_var_tmp.track_id;
+	    	tracked_box_new.value =kf_var_tmp.track_id;
+	    	tracked_box_new.dimensions = lc_point.at(i).dimensions;
+        //
+	    	tracked_boxes_new.boxes.push_back(tracked_box_new);
+        tracked_boxes_new.header=tracked_box_new.header;    
+ 	    	//END BBOXES
+
   
     }//end for (int i=0 ; i<lc_obj_num ; i++)
 
     //plot the objects
-        
+   
     pub_jsk_tracked_objects_new_.publish(tracked_boxes_new);
-
+    tracked_boxes_new={};
     
     // cout << switch_kf_tmp_bool  <<endl;
     // change to the other tmp_vector
