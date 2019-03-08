@@ -31,7 +31,7 @@
 using namespace std;
 using namespace cv;
 
-static double Threshold = 1.5;//for fusion
+static double Threshold = 0.5;//for fusion
 
 
 float T=60*0.001; //T : Operating rate of the system
@@ -245,9 +245,9 @@ int main(int argc, char *argv[])
     // [ 0 0  0  1  ]
     Mat matrix_F = Mat::zeros(4, 4, CV_32F);
     matrix_F.at<float>(0) = 1.0;
-    matrix_F.at<float>(1) = T;
+    matrix_F.at<float>(1) = T/10;
     matrix_F.at<float>(5) = 1.0f;
-    matrix_F.at<float>(11) = T;
+    matrix_F.at<float>(11) = T/10;
     matrix_F.at<float>(10) = 1.0f;
     matrix_F.at<float>(15) = 1.0f;
 
@@ -333,8 +333,6 @@ int main(int argc, char *argv[])
    
     // test_strust.velocity.x=121;
 
-    // num3=try1.add(num1,num2);
-    // cout << test_strust.velocity.x  <<endl;
 
     // kalman_var_tmp_sub.clear();
     

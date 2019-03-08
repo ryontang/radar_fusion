@@ -43,7 +43,7 @@ public :
     
     Mat state = cv::Mat::zeros(4, 1, CV_32F);  // [x,v_x,y,v_y]
     Mat meas = cv::Mat::zeros(4, 1, CV_32F);    // [xr,vr_x,yr,vr_y]
-    Mat error_cov_pre = cv::Mat::eye(4, 4, CV_32F);   //initial P
+    Mat error_cov_pre = cv::Mat::eye(4, 4, CV_32F)*0.1;   //initial P
     float z ; 
     float vz ; 
   
