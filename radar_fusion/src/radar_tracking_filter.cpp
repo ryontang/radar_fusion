@@ -17,6 +17,13 @@
 #include <geometry_msgs/Polygon.h>
 #include <std_msgs/Header.h>
 
+//time Synchronize
+#include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
+
+
+
 #include <jsk_recognition_msgs/BoundingBox.h>
 #include <jsk_recognition_msgs/BoundingBoxArray.h>
 
@@ -27,16 +34,28 @@
 
 using namespace std;
 using namespace cv;
+using namespace message_filters;
 
-static double Threshold = 3;//for fusion
+static double Threshold = 0.5;//for fusion
+
+
 float T=60*0.001; //T : Operating rate of the system
 
 
 static ros::Publisher pub;
 static ros::Publisher pub_jsk_tracked_objects_new_;
 
+// typedef struct _tracking_measurement{
+//   int id;
+//   Point3d position;
+//   Point3d velocity;
+//   geometry_msgs::Vector3 dimensions;
+// }tracking_measurement;
+
+
 static vector<tracking_measurement> lc_point; 
 static vector<tracking_measurement> radar_point; 
+
 
 static std::string object_type="person";
 static ros::Time image_obj_tracked_time;
@@ -46,8 +65,10 @@ tracking_measurement tmp_lidarcamera;
 tracking_measurement tmp_radar;
 tracking_measurement nearest_tracking_point;
 
+
 //for show
 jsk_recognition_msgs::BoundingBoxArray tracked_boxes_new;//wei
+
 
 int lc_obj_num;
 int radar_obj_num;
@@ -68,8 +89,6 @@ Mat matrix_R = Mat::zeros(4, 4, CV_32F);
 
 float min_distance;
 float weighting = 0.5; 
-float weighting_v = 0.001; 
-
 
 // 0 and 1
 vector<kf_var> kalman_var_tmp[2];
@@ -116,7 +135,7 @@ void cal_nearest_point_tracking(const tracking_measurement tmp_lidar_camera_poin
   // float last_distance=0;
 
   for(int i=0; i<tmp_radar_point.size(); i++ ){
-    // cal the distance of two points
+     // cal the distance of two points
     //  distance_tmp=sqrt(pow(tmp_lidar_camera_point.position.x-tmp_radar_point.at(i).position.x,2)+
     //                    pow(tmp_lidar_camera_point.position.y-tmp_radar_point.at(i).position.y,2)+
     //                    pow(tmp_lidar_camera_point.position.z-tmp_radar_point.at(i).position.z,2));
@@ -150,76 +169,74 @@ void cal_nearest_point_tracking(const tracking_measurement tmp_lidar_camera_poin
 //callback
 //////////////////////////////////////////////////////////////////
 
-void detected_obj_new_callback(const autoware_msgs::DetectedObjectArray::ConstPtr& msg)
+void callback(const autoware_msgs::DetectedObjectArray::ConstPtr& msg_detect, const radar_msgs::RadarTrackArray::ConstPtr& msg)
 {
-    // cout << "check 1" << endl;
-    lc_obj_num = msg->objects.size();// number of radar tracking objects
-    // cout<<"number of radar tracking objects: " << lc_obj_num << endl;
-    lc_point.clear();
-    for (int i=0; i<lc_obj_num ; i++){
-      // float tmp=(msg->objects[i].dimensions.x)*(msg->objects[i].dimensions.y)*(msg->objects[i].dimensions.z);
-      // if(tmp>2.0) {
-      //   continue;
-      // } 
-      // tmp={};
-      // cout<< tmp_lidarcamera.dimensions << endl;
-
-      tmp_lidarcamera.id= msg->objects[i].id;
-      tmp_lidarcamera.position.x=msg->objects[i].pose.position.x;
-      tmp_lidarcamera.position.y=msg->objects[i].pose.position.y;
-      tmp_lidarcamera.position.z=msg->objects[i].pose.position.z;
-      tmp_lidarcamera.velocity.x=msg->objects[i].velocity.linear.x;
-      tmp_lidarcamera.velocity.y=msg->objects[i].velocity.linear.y;
-      tmp_lidarcamera.velocity.z=msg->objects[i].velocity.linear.z;
-      tmp_lidarcamera.dimensions=msg->objects[i].dimensions;
-
-      // cout<<"id: "<< tmp_lidarcamera.id << endl;
-      // cout<<"Position: " << tmp_lidarcamera.position << endl;
-      // cout<<"Velocity: " << tmp_lidarcamera.velocity << endl;   
-
-      lc_point.push_back(tmp_lidarcamera);
-    }
-    header_tmp=msg->header;
-    // cout<< "----------------------" << endl;
-    // cout<< *msg << endl;
+  // Solve all of perception here...
+  cout<< "check callback" << endl;
 }
 
-// for radar 
-void radar_tracks_callback(const radar_msgs::RadarTrackArray::ConstPtr& msg)
-{
-    // cout << "check 2" << endl;
-    radar_point.clear();
+// void detected_obj_new_callback(const autoware_msgs::DetectedObjectArray::ConstPtr& msg)
+// {
+//     // cout << "check 1" << endl;
+//     lc_obj_num = msg->objects.size();// number of radar tracking objects
+//     // cout<<"number of radar tracking objects: " << lc_obj_num << endl;
+//     lc_point.clear();
+//     for (int i=0; i<lc_obj_num ; i++){
+//       tmp_lidarcamera.id= msg->objects[i].id;
+//       tmp_lidarcamera.position.x=msg->objects[i].pose.position.x;
+//       tmp_lidarcamera.position.y=msg->objects[i].pose.position.y;
+//       tmp_lidarcamera.position.z=msg->objects[i].pose.position.z;
+//       tmp_lidarcamera.velocity.x=msg->objects[i].velocity.linear.x;
+//       tmp_lidarcamera.velocity.y=msg->objects[i].velocity.linear.y;
+//       tmp_lidarcamera.velocity.z=msg->objects[i].velocity.linear.z;
+//       tmp_lidarcamera.dimensions=msg->objects[i].dimensions;
+//       // cout<<"id: "<< tmp_lidarcamera.id << endl;
+//       // cout<<"Position: " << tmp_lidarcamera.position << endl;
+//       // cout<<"Velocity: " << tmp_lidarcamera.velocity << endl;   
 
-    radar_obj_num=msg->tracks.size(); // number of radar tracking objects
-    // cout<< *msg << endl;
+//       lc_point.push_back(tmp_lidarcamera);
+//     }
+//     header_tmp=msg->header;
+//     // cout<< "----------------------" << endl;
+//     // cout<< *msg << endl;
+// }
 
-    geometry_msgs::Polygon tmp_radar_rect;   //four point of the object 
-    geometry_msgs::Point32 tmp_point;        //the center of the object
-    tmp_point.x=tmp_point.y=tmp_point.z=0;   //initial the point
+// // for radar 
+// void radar_tracks_callback(const radar_msgs::RadarTrackArray::ConstPtr& msg)
+// {
+//     // cout << "check 2" << endl;
+//     radar_point.clear();
 
-    for(int i=0; i<radar_obj_num ; i++){
+//     radar_obj_num=msg->tracks.size(); // number of radar tracking objects
+//     // cout<< *msg << endl;
+
+//     geometry_msgs::Polygon tmp_radar_rect;   //four point of the object 
+//     geometry_msgs::Point32 tmp_point;        //the center of the object
+//     tmp_point.x=tmp_point.y=tmp_point.z=0;   //initial the point
+
+//     for(int i=0; i<radar_obj_num ; i++){
    
-      tmp_radar_rect= msg->tracks.at(i).track_shape;
-      cal_the_centerpoint(tmp_radar_rect,tmp_point);//now the point center point of the radar track is "tmp_point"
+//       tmp_radar_rect= msg->tracks.at(i).track_shape;
+//       cal_the_centerpoint(tmp_radar_rect,tmp_point);//now the point center point of the radar track is "tmp_point"
       
-      tmp_radar.id = msg->tracks.at(i).track_id;
-      tmp_radar.position.x=tmp_point.x;
-      tmp_radar.position.y=tmp_point.y;
-      tmp_radar.position.z=tmp_point.z;
-      tmp_radar.velocity.x=msg->tracks.at(i).linear_velocity.x;     
-      tmp_radar.velocity.y=msg->tracks.at(i).linear_velocity.y;     
-      tmp_radar.velocity.z=msg->tracks.at(i).linear_velocity.z;    
+//       tmp_radar.id = msg->tracks.at(i).track_id;
+//       tmp_radar.position.x=tmp_point.x;
+//       tmp_radar.position.y=tmp_point.y;
+//       tmp_radar.position.z=tmp_point.z;
+//       tmp_radar.velocity.x=msg->tracks.at(i).linear_velocity.x;     
+//       tmp_radar.velocity.y=msg->tracks.at(i).linear_velocity.y;     
+//       tmp_radar.velocity.z=msg->tracks.at(i).linear_velocity.z;    
 
-      // check tmp_radar
-      // cout<<tmp_radar.id<<endl;
-      // cout<<tmp_radar.position<<endl;
-      // cout<<tmp_radar.velocity<<endl;
-      // cout<<"----------------------"<<endl;
+//       // check tmp_radar
+//       // cout<<tmp_radar.id<<endl;
+//       // cout<<tmp_radar.position<<endl;
+//       // cout<<tmp_radar.velocity<<endl;
+//       // cout<<"----------------------"<<endl;
 
-      radar_point.push_back(tmp_radar);
-    }    
+//       radar_point.push_back(tmp_radar);
+//     }    
   
-}
+// }
 
 //////////////////////////////////////////////////////////////////
 //
@@ -239,7 +256,7 @@ int main(int argc, char *argv[])
     // [ 0 0  0  1  ]
     Mat matrix_F = Mat::zeros(4, 4, CV_32F);
     matrix_F.at<float>(0) = 1.0;
-    matrix_F.at<float>(1) = T;
+    matrix_F.at<float>(1) = T/10;
     matrix_F.at<float>(5) = 1.0f;
     matrix_F.at<float>(11) = T/10;
     matrix_F.at<float>(10) = 1.0f;
@@ -289,8 +306,13 @@ int main(int argc, char *argv[])
     
 
   // This data has been converted to "delphi_esr" coordinate system.
-  ros::Subscriber detected_obj_new_sub    =   n.subscribe("/detected_objects_new", 1, detected_obj_new_callback);
-  ros::Subscriber radar_tracks_sub =  n.subscribe("/as_tx/radar_tracks", 1, radar_tracks_callback);
+  // ros::Subscriber detected_obj_new_sub    =   n.subscribe("/detected_objects_new", 1, detected_obj_new_callback);
+  // ros::Subscriber radar_tracks_sub =  n.subscribe("/as_tx/radar_tracks", 1, radar_tracks_callback);
+
+  message_filters::Subscriber<autoware_msgs::DetectedObjectArray> detected_obj_new_sub(n, "/detected_objects_new", 1);             // topic1 输入
+  message_filters::Subscriber<radar_msgs::RadarTrackArray> radar_tracks_sub(n, "/as_tx/radar_tracks", 1);   // topic2 输入
+
+
 
   //pub = n.advertise<autoware_msgs::obj_label>("obj_label_radarfusion",1);
   pub_jsk_tracked_objects_new_ = n.advertise<jsk_recognition_msgs::BoundingBoxArray>("/bounding_boxes_tracked/radar_fusion",1);//wei
@@ -321,8 +343,12 @@ int main(int argc, char *argv[])
     // int num1=1; int num2=2;  int num3=3;
     // cout << "check func"  <<add(num1,num2,num3) <<endl;
 
+
+
     // cout << try1.test  <<endl;
+   
     // test_strust.velocity.x=121;
+
 
     // kalman_var_tmp_sub.clear();
     
@@ -363,7 +389,7 @@ int main(int argc, char *argv[])
     ////////////////////////////////////////////////////////////////////////////
 
     cout << "---------------------------------------------------------------------------" << endl;  
-    // cout << "size of lc objects "<< lc_obj_num << endl;
+    cout << "size of lc objects "<< lc_obj_num << endl;
     for (int i=0 ; i<lc_obj_num ; i++){
 
       //for show bounging box on RViz
@@ -371,18 +397,18 @@ int main(int argc, char *argv[])
       autoware_msgs::DetectedObjectArray detected_objects_new;
 
       //check every "lc_point"
-      // cout<< "Size of kalman_var_tmp[1/0]: " << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl;
+      cout<< "Size of kalman_var_tmp[1/0]: " << kalman_var_tmp[switch_kf_tmp_bool].size()<<endl;
 
       bool flag_exist_inlast = false; // initialize the flag every time
 
       for (int j=0; j<kalman_var_tmp[switch_kf_tmp_bool].size(); j++){
       //check if "lc_point" is in  the last tmp vector 
         
-        // cout << "----- check with the last vector -----" << endl;  
+        cout << "----- check with the last vector -----" << endl;  
         
         if (lc_point.at(i).id==kalman_var_tmp[switch_kf_tmp_bool].at(j).track_id){            
           flag_exist_inlast = true; 
-          // cout <<"flag_exist_inlast: " << flag_exist_inlast << endl;
+          cout <<"flag_exist_inlast: " << flag_exist_inlast << endl;
           // cout << "//////////////////" << endl;  
           // cout << lc_point.at(i).id << endl;  
           // cout << "j: " <<j <<endl;
@@ -410,12 +436,12 @@ int main(int argc, char *argv[])
               // Previous state of kf
               kf.statePost.at<float>(0,0)=(lc_point.at(i).position.x)*weighting +
                                           (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(0,0))*(1-weighting);                
-              kf.statePost.at<float>(1,0)=(lc_point.at(i).velocity.x)*weighting_v +
-                                          (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(1,0))*(1-weighting_v);
+              kf.statePost.at<float>(1,0)=(lc_point.at(i).velocity.x)*weighting +
+                                          (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(1,0))*(1-weighting);
               kf.statePost.at<float>(2,0)=(lc_point.at(i).position.y)*weighting +
                                           (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(2,0))*(1-weighting);
-              kf.statePost.at<float>(3,0)=(lc_point.at(i).velocity.y)*weighting_v +
-                                          (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(3,0))*(1-weighting_v);
+              kf.statePost.at<float>(3,0)=(lc_point.at(i).velocity.y)*weighting +
+                                          (kalman_var_tmp[switch_kf_tmp_bool].at(j).state.at<float>(3,0))*(1-weighting);
              
               //I don't know why the input cannot be load, so I have to use the func below 
               kf.statePost=(Mat_<float>(4,1) << kf.statePost.at<float>(0,0),
@@ -447,6 +473,7 @@ int main(int argc, char *argv[])
                                                 nearest_tracking_point.velocity.x,
                                                 nearest_tracking_point.position.y,
                                                 nearest_tracking_point.velocity.y) ;
+           
 
               cout << "check measurement: " << measurement << endl  << endl;  
 
@@ -465,30 +492,9 @@ int main(int argc, char *argv[])
 
               kalman_var_tmp[!switch_kf_tmp_bool].push_back(kf_var_tmp);
 
-          } //
-          else{
-            
-              kf_var_tmp.track_id=lc_point.at(i).id;
-              // kf_var_tmp.state=lc_point.at(i).position.z ;              // [x,v_x,y,v_y]
-              // kf_var_tmp.state=lc_point.at(i).position.z ;              // [x,v_x,y,v_y]
-              // kf_var_tmp.state=lc_point.at(i).position.z ;              // [x,v_x,y,v_y]
-              // kf_var_tmp.state=lc_point.at(i).position.z ;              // [x,v_x,y,v_y]
-              kf_var_tmp.state=(Mat_<float>(4,1) << lc_point.at(i).position.x ,
-                                                    lc_point.at(i).velocity.x ,
-                                                    lc_point.at(i).position.y ,
-                                                    lc_point.at(i).velocity.y ) ;
+          }     
 
-
-
-              kf_var_tmp.z=lc_point.at(i).position.z;
-              kf_var_tmp.error_cov_pre = kf.errorCovPost;
-              cout << "check "<< endl;
-              // cout << "errorCovPre: "<< kf.errorCovPre << endl;
-              // cout << "errorCovPost: "<< kf.errorCovPost << endl;
-
-              kalman_var_tmp[!switch_kf_tmp_bool].push_back(kf_var_tmp);
-          }
-        }// end if (check if it is in last vec)
+        }// end if
 
         // else{
         //     // set lc_point into kalman_var_tmp
@@ -526,7 +532,7 @@ int main(int argc, char *argv[])
 
       if (flag_exist_inlast == false){
            // set lc_point into kalman_var_tmp
-            // cout <<"flag_exist_inlast: " <<flag_exist_inlast << endl;
+            cout <<"flag_exist_inlast: " <<flag_exist_inlast << endl;
 
             kf_var_tmp.track_id = lc_point.at(i).id;
             // [x,v_x,y,v_y]
@@ -566,14 +572,7 @@ int main(int argc, char *argv[])
     }//end for (int i=0 ; i<lc_obj_num ; i++)
 
     //plot the objects
-    if(lc_obj_num==0){
-        double sec =ros::Time::now().toSec();
-
-      	tracked_boxes_new.header.stamp.sec = sec;
-        // tracked_box_new.header.stamp.nsec = nsec;
-	    	tracked_boxes_new.header.frame_id = "delphi_esr";
    
-    }
     pub_jsk_tracked_objects_new_.publish(tracked_boxes_new);
     tracked_boxes_new={};
     
@@ -581,10 +580,34 @@ int main(int argc, char *argv[])
     // change to the other tmp_vector
     kalman_var_tmp[switch_kf_tmp_bool].clear(); //this may cause memery dump
     switch_kf_tmp_bool=!switch_kf_tmp_bool;
+        cout << "check 5"  <<endl;
 
-    ros::spinOnce();
-    loop_rate.sleep();
+
+// message_filters::Subscriber<autoware_msgs::DetectedObjectArray> detected_obj_new_sub(n, "/detected_objects_new", 1);             // topic1 输入
+//   message_filters::Subscriber<radar_msgs::RadarTrackArray> radar_tracks_sub(n, "/as_tx/radar_tracks", 1);   // topic2 输入
   
+  typedef sync_policies::ApproximateTime<autoware_msgs::DetectedObjectArray,  radar_msgs::RadarTrackArray> MySyncPolicy;
+  // ApproximateTime takes a queue size as its constructor argument, hence MySyncPolicy(10)
+  Synchronizer<MySyncPolicy> sync(MySyncPolicy(100), detected_obj_new_sub, radar_tracks_sub);
+  sync.registerCallback(boost::bind(&callback, _1, _2));
+
+
+///
+  // TimeSynchronizer<autoware_msgs::DetectedObjectArray, radar_msgs::RadarTrackArray> sync(detected_obj_new_sub, radar_tracks_sub, 10);
+  //         cout << "check 6"  <<endl;
+
+  // sync.registerCallback(boost::bind(&callback, _1, _2));
+  // message_filters::Subscriber<Detected_Obj> detected_obj_new_sub(n, "/detected_objects_new", 1);             // topic1 输入
+  // message_filters::Subscriber<Radar> radar_tracks_sub(n, "/as_tx/radar_tracks", 1);   // topic2 输入
+    cout << "check 7"  <<endl;
+  ros::spinOnce();
+
+    // ros::spin();
+    cout << "check 8"  <<endl;
+
+    loop_rate.sleep();
+    cout << "check 9"  <<endl;
+
   }
 
 

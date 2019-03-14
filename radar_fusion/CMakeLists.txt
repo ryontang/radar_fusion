@@ -145,6 +145,7 @@ link_directories(${OpenCV_LIBRARY_DIRS})
 # add_executable(${PROJECT_NAME}_node src/radar_fusion_node.cpp)
 add_executable(radar_detection src/radar_detection.cpp)
 add_executable(radar_tracking src/radar_tracking.cpp)
+add_executable(radar_tracking_filter src/radar_tracking_filter.cpp)
 
 
 
@@ -166,6 +167,8 @@ add_executable(radar_tracking src/radar_tracking.cpp)
 # )
 target_link_libraries(radar_detection ${catkin_LIBRARIES})
 target_link_libraries(radar_tracking ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+target_link_libraries(radar_tracking_filter ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+
 
 
 
